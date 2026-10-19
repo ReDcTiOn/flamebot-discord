@@ -1,5 +1,6 @@
 import { getRatingSettings, prisma } from "@flamebot/core";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
+import { PageHead, Section } from "@/components/Fields";
 import { requirePage } from "@/lib/auth";
 import { saveMessageSettings } from "../actions";
 
@@ -7,9 +8,9 @@ export const metadata = { title: "Сообщения" };
 
 const PLACEHOLDERS = [
   ["{user}", "упоминание игрока"],
-  ["{name}", "имя игрока без упоминания"],
-  ["{rank}", "название нового ранга с эмодзи"],
-  ["{reward}", "сколько скрапа выдано за ранг"],
+  ["{name}", "имя без упоминания"],
+  ["{rank}", "новый ранг с эмодзи"],
+  ["{reward}", "скрап за ранг"],
 ] as const;
 
 export default async function MessagesPage() {
@@ -18,34 +19,25 @@ export default async function MessagesPage() {
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1>Сообщения</h1>
-          <p>Тексты, которые бот пишет в чат.</p>
-        </div>
-      </div>
+      <PageHead title="Сообщения" hint="Тексты, которые бот пишет в чат." />
 
-      <div className="card">
-        <div className="card-head">
-          <div>
-            <h2>Новый ранг</h2>
-            <p>Бот упоминает только самого игрока. @everyone и @here в этом тексте не сработают.</p>
+      <ActionForm action={saveMessageSettings}>
+        <Section title="Новый ранг" hint="Бот упоминает только самого игрока. @everyone и @here в этом тексте не сработают.">
+          <div className="setting" style={{ flexDirection: "column", alignItems: "stretch", gap: 10 }}>
+            <textarea name="rankUpMessage" defaultValue={s.rankUpMessage} maxLength={500} required className="wide" rows={3} aria-label="Текст объявления" />
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {PLACEHOLDERS.map(([key, label]) => (
+                <span key={key} className="chip">
+                  <code style={{ background: "none", padding: 0 }}>{key}</code> {label}
+                </span>
+              ))}
+            </div>
           </div>
+        </Section>
+        <div className="save-bar">
+          <SubmitButton>Сохранить</SubmitButton>
         </div>
-        <ActionForm action={saveMessageSettings}>
-          <textarea name="rankUpMessage" defaultValue={s.rankUpMessage} maxLength={500} required className="wide" rows={3} />
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
-            {PLACEHOLDERS.map(([key, label]) => (
-              <span key={key} className="chip">
-                <code style={{ background: "none", padding: 0 }}>{key}</code> {label}
-              </span>
-            ))}
-          </div>
-          <div className="form-actions">
-            <SubmitButton>Сохранить</SubmitButton>
-          </div>
-        </ActionForm>
-      </div>
+      </ActionForm>
     </>
   );
 }

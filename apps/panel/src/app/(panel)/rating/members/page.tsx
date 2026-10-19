@@ -4,6 +4,7 @@ import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { requirePage } from "@/lib/auth";
 import { avatarUrl } from "@/lib/discord";
 import { adjustMember, resetMember } from "../actions";
+import { PageHead } from "@/components/Fields";
 
 export const metadata = { title: "Пользователи" };
 
@@ -41,12 +42,7 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1>Пользователи</h1>
-          <p>Поиск игрока, ручная правка опыта, скрапа и репутации. Каждое изменение пишется в журнал с причиной.</p>
-        </div>
-      </div>
+      <PageHead title="Пользователи" hint="Поиск игрока, ручная правка опыта, скрапа и репутации. Каждое изменение пишется в журнал с причиной." />
 
       <form method="get" style={{ display: "flex", gap: 8, marginBottom: 16 }}>
         <input type="search" name="q" defaultValue={q} placeholder="Ник или Discord ID" className="wide" maxLength={64} />
@@ -88,7 +84,7 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
                   <td style={{ width: 1 }}>
                     <details className="edit" style={{ position: "relative" }}>
                       <summary className="btn small">Изменить</summary>
-                      <div style={{ position: "absolute", right: 0, top: 36, zIndex: 5, width: 360, background: "var(--surface-2)", border: "1px solid var(--border-strong)", borderRadius: 12, padding: 14 }}>
+                      <div className="popover">
                         <ActionForm action={adjustMember} resetOnSuccess>
                           <input type="hidden" name="memberId" value={m.id} />
                           <div className="grid grid-2">

@@ -1,5 +1,6 @@
 import { formatNumber, prisma, startOfUtcDay } from "@flamebot/core";
 import { requirePage } from "@/lib/auth";
+import { PageHead } from "@/components/Fields";
 
 export const metadata = { title: "Scrap Rank" };
 
@@ -31,12 +32,7 @@ export default async function RatingOverview() {
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1>Scrap Rank</h1>
-          <p>Сводка по активности и экономике сервера.</p>
-        </div>
-      </div>
+      <PageHead title="Scrap Rank" hint="Сводка по активности и экономике сервера." />
 
       <div className="grid grid-4" style={{ marginBottom: 16 }}>
         <div className="metric"><div className="metric-label">Участников в рейтинге</div><div className="metric-value">{formatNumber(members)}</div></div>

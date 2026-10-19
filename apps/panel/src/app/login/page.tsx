@@ -21,7 +21,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   return (
     <main className="login">
       <div className="login-card">
-        <div className="brand-mark">
+        <div className="login-mark">
           <Flame size={26} aria-hidden="true" />
         </div>
         <h1>FlameBot</h1>

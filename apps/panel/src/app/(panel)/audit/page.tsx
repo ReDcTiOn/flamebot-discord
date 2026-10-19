@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@flamebot/core";
 import { requirePage } from "@/lib/auth";
 import { modules } from "@/modules";
+import { PageHead } from "@/components/Fields";
 
 export const metadata = { title: "Журнал" };
 
@@ -45,12 +46,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1>Журнал действий</h1>
-          <p>Кто, когда и что менял в панели. Записи не редактируются и не удаляются из интерфейса.</p>
-        </div>
-      </div>
+      <PageHead title="Журнал действий" hint="Кто, когда и что менял в панели. Записи не редактируются и не удаляются из интерфейса." />
 
       <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
         <Link href={link(1)} className={!moduleFilter ? "chip accent" : "chip"}>Все</Link>

@@ -1,68 +1,71 @@
 import { getRatingSettings, prisma } from "@flamebot/core";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
-import { FieldRow, NumberInput } from "@/components/Fields";
+import { EmptyState, FieldRow, NumberInput, PageHead, Section, Tabs, pickTab } from "@/components/Fields";
 import { requirePage } from "@/lib/auth";
 import { saveRepSettings } from "../actions";
 
 export const metadata = { title: "Репутация" };
 
-export default async function RepPage() {
+const TABS = [
+  { key: "limits", label: "Ограничения" },
+  { key: "history", label: "История" },
+] as const;
+
+export default async function RepPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   await requirePage();
+  const tab = pickTab((await searchParams).tab, TABS.map((t) => t.key));
   const [s, recent] = await Promise.all([
     getRatingSettings(prisma),
-    prisma.repTransaction.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 30,
-      include: { giver: true, receiver: true },
-    }),
+    tab === "history"
+      ? prisma.repTransaction.findMany({ orderBy: { createdAt: "desc" }, take: 50, include: { giver: true, receiver: true } })
+      : Promise.resolve([]),
   ]);
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1>Репутация</h1>
-          <p>Игроки дают друг другу +1 командой /rep. Ограничения ниже защищают от накрутки.</p>
-        </div>
-      </div>
+      <PageHead title="Репутация" hint="Игроки дают друг другу +1 командой /rep. Ограничения защищают от накрутки." />
+      <Tabs tabs={[...TABS]} active={tab} base="/rating/rep" />
 
-      <div className="card">
-        <div className="card-head"><h2>Ограничения</h2></div>
+      {tab === "limits" && (
         <ActionForm action={saveRepSettings}>
-          <FieldRow label="Как часто можно давать, часов" hint="Один /rep за это время">
-            <NumberInput name="repCooldownHours" defaultValue={s.repCooldownHours} min={1} max={720} />
-          </FieldRow>
-          <FieldRow label="Повтор одному игроку, дней" hint="0 — без ограничения">
-            <NumberInput name="repSameTargetDays" defaultValue={s.repSameTargetDays} min={0} max={365} />
-          </FieldRow>
-          <FieldRow label="Стаж на сервере, дней" hint="Новички и твинки не могут давать репутацию сразу после входа">
-            <NumberInput name="repMinMemberDays" defaultValue={s.repMinMemberDays} min={0} max={365} />
-          </FieldRow>
-          <div className="form-actions">
-            <SubmitButton>Сохранить</SubmitButton>
+          <Section title="Защита от накрутки">
+            <div className="tiles">
+              <FieldRow icon="clock" label="Как часто можно давать, часов" hint="Один /rep за это время">
+                <NumberInput name="repCooldownHours" defaultValue={s.repCooldownHours} min={1} max={720} label="Часов" />
+              </FieldRow>
+              <FieldRow icon="repeat" label="Повтор одному игроку, дней" hint="0 — без ограничения">
+                <NumberInput name="repSameTargetDays" defaultValue={s.repSameTargetDays} min={0} max={365} label="Дней" />
+              </FieldRow>
+              <FieldRow icon="shield" label="Стаж на сервере, дней" hint="Новички и твинки не могут давать репутацию сразу после входа">
+                <NumberInput name="repMinMemberDays" defaultValue={s.repMinMemberDays} min={0} max={365} label="Дней" />
+              </FieldRow>
+            </div>
+          </Section>
+          <div className="save-bar">
+            <SubmitButton>Сохранить изменения</SubmitButton>
           </div>
         </ActionForm>
-      </div>
+      )}
 
-      <div className="card">
-        <div className="card-head"><h2>Последние /rep</h2></div>
-        {recent.length === 0 ? (
-          <p className="empty">Пока никто не давал репутацию.</p>
+      {tab === "history" &&
+        (recent.length === 0 ? (
+          <EmptyState icon="thumb" title="Пока пусто" hint="Здесь появятся последние /rep игроков." />
         ) : (
-          <table className="table">
-            <thead><tr><th>Кто</th><th>Кому</th><th>Когда</th></tr></thead>
-            <tbody>
-              {recent.map((r) => (
-                <tr key={r.id}>
-                  <td>{r.giver.displayName}</td>
-                  <td>{r.receiver.displayName}</td>
-                  <td className="secondary">{r.createdAt.toLocaleString("ru-RU")}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+          <div className="card">
+            <table className="table">
+              <thead><tr><th>Кто</th><th>Кому</th><th>Когда</th></tr></thead>
+              <tbody>
+                {recent.map((r) => (
+                  <tr key={r.id}>
+                    <td>{r.giver.displayName}</td>
+                    <td>{r.receiver.displayName}</td>
+                    <td className="secondary">{r.createdAt.toLocaleString("ru-RU")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
     </>
   );
 }

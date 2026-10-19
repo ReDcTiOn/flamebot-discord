@@ -3,6 +3,7 @@ import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { requirePage } from "@/lib/auth";
 import { listRoles, roleColor } from "@/lib/guild";
 import { revokeAllSessions, saveAccess } from "../actions";
+import { PageHead } from "@/components/Fields";
 
 export const metadata = { title: "Доступ" };
 
@@ -17,12 +18,7 @@ export default async function AccessPage() {
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1>Доступ к панели</h1>
-          <p>Владелец сервера и роли с правом «Администратор» видят всё. Право «Управлять сервером» и роли ниже дают доступ ко всему, кроме этой страницы.</p>
-        </div>
-      </div>
+      <PageHead title="Доступ к панели" hint="Владелец сервера и роли с правом «Администратор» видят всё. Право «Управлять сервером» и роли ниже дают доступ ко всему, кроме этой страницы." />
 
       <div className="card">
         <div className="card-head">

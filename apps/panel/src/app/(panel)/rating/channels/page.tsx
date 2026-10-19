@@ -1,5 +1,6 @@
 import { getRatingSettings, prisma } from "@flamebot/core";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
+import { EmptyState, FieldRow, PageHead, Section } from "@/components/Fields";
 import { requirePage } from "@/lib/auth";
 import { listTextChannels } from "@/lib/guild";
 import { saveChannelSettings } from "../actions";
@@ -13,44 +14,29 @@ export default async function ChannelsPage() {
   if (channels.length === 0) {
     return (
       <>
-        <div className="page-head"><div><h1>Каналы</h1></div></div>
-        <p className="notice warn">Список каналов появится, когда бот подключится к серверу.</p>
+        <PageHead title="Каналы" />
+        <EmptyState icon="hash" title="Каналов пока нет" hint="Список появится, когда бот подключится к серверу." />
       </>
     );
   }
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1>Каналы</h1>
-          <p>Где бот объявляет новые ранги, где не начисляет опыт и где принимает команды.</p>
-        </div>
-      </div>
+      <PageHead title="Каналы" hint="Где бот объявляет новые ранги, где не начисляет опыт и где принимает команды." />
 
       <ActionForm action={saveChannelSettings}>
-        <div className="card">
-          <div className="card-head">
-            <div>
-              <h2>Объявления о новом ранге</h2>
-              <p>Если канал не выбран, бот пишет туда, где игрок получил ранг.</p>
-            </div>
-          </div>
-          <select name="announceChannelId" defaultValue={s.announceChannelId ?? ""} className="wide">
-            <option value="">Тот же канал, где было сообщение</option>
-            {channels.map((c) => (
-              <option key={c.id} value={c.id}># {c.name}</option>
-            ))}
-          </select>
-        </div>
+        <Section title="Объявления">
+          <FieldRow icon="megaphone" label="Канал для объявлений о новом ранге" hint="Если не выбран, бот пишет туда, где игрок получил ранг">
+            <select name="announceChannelId" defaultValue={s.announceChannelId ?? ""} style={{ minWidth: 260 }} aria-label="Канал объявлений">
+              <option value="">Тот же канал, где было сообщение</option>
+              {channels.map((c) => (
+                <option key={c.id} value={c.id}># {c.name}</option>
+              ))}
+            </select>
+          </FieldRow>
+        </Section>
 
-        <div className="card">
-          <div className="card-head">
-            <div>
-              <h2>Каналы без опыта</h2>
-              <p>Флуд, мемы, боты. Сообщения здесь не дают опыта и скрапа.</p>
-            </div>
-          </div>
+        <Section title="Каналы без опыта" hint="Флуд, мемы, тикеты, боты. Сообщения здесь не дают опыта и скрапа.">
           <div className="check-list">
             {channels.map((c) => (
               <label key={c.id} className="check-item">
@@ -59,15 +45,9 @@ export default async function ChannelsPage() {
               </label>
             ))}
           </div>
-        </div>
+        </Section>
 
-        <div className="card">
-          <div className="card-head">
-            <div>
-              <h2>Каналы для команд</h2>
-              <p>Если ничего не отмечено, команды работают везде.</p>
-            </div>
-          </div>
+        <Section title="Каналы для команд" hint="Если ничего не отмечено, команды бота работают везде.">
           <div className="check-list">
             {channels.map((c) => (
               <label key={c.id} className="check-item">
@@ -76,9 +56,10 @@ export default async function ChannelsPage() {
               </label>
             ))}
           </div>
-          <div className="form-actions">
-            <SubmitButton>Сохранить каналы</SubmitButton>
-          </div>
+        </Section>
+
+        <div className="save-bar">
+          <SubmitButton>Сохранить каналы</SubmitButton>
         </div>
       </ActionForm>
     </>

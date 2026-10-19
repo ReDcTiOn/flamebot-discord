@@ -1,6 +1,7 @@
 import { formatNumber, prisma, type ShopItem } from "@flamebot/core";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
-import { RoleSelect, Switch } from "@/components/Fields";
+import { EmptyState, PageHead, RoleSelect, Switch, Tabs, pickTab } from "@/components/Fields";
+import { Icon } from "@/components/Icon";
 import { requirePage } from "@/lib/auth";
 import { listRoles } from "@/lib/guild";
 import { createShopItem, deleteShopItem, updateShopItem } from "../actions";
@@ -60,76 +61,92 @@ function ItemFields({ item, roles }: { item?: ShopItem; roles: Roles }) {
   );
 }
 
-export default async function ShopPage() {
+const TABS = [
+  { key: "items", label: "Товары" },
+  { key: "new", label: "Новый товар" },
+  { key: "history", label: "История покупок" },
+] as const;
+
+const TYPE_ICON = { ROLE: "palette", CUSTOM_ROLE: "users", BADGE: "package" } as const;
+
+export default async function ShopPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   await requirePage();
+  const tab = pickTab((await searchParams).tab, TABS.map((t) => t.key));
   const [items, roles, recent] = await Promise.all([
     prisma.shopItem.findMany({
       orderBy: [{ sortOrder: "asc" }, { price: "asc" }],
       include: { _count: { select: { purchases: true } } },
     }),
     listRoles(),
-    prisma.purchase.findMany({ orderBy: { createdAt: "desc" }, take: 20, include: { item: true, member: true } }),
+    prisma.purchase.findMany({ orderBy: { createdAt: "desc" }, take: 30, include: { item: true, member: true } }),
   ]);
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1>Магазин</h1>
-          <p>Только товары в Discord. Роли с правами модерации продавать нельзя: панель и бот их не выдают.</p>
-        </div>
-      </div>
+      <PageHead title="Магазин" hint="Только товары в Discord. Роли с правами модерации продавать нельзя: панель и бот их не выдают." />
+      <Tabs tabs={[...TABS]} active={tab} base="/rating/shop" />
 
-      <div className="card">
-        <div className="card-head"><h2>Товары</h2></div>
-        {items.length === 0 && <p className="empty">Товаров пока нет. Добавь первый ниже.</p>}
-        {items.map((item) => (
-          <details key={item.id} className="edit" style={{ borderTop: "1px solid var(--border)" }}>
-            <summary style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 8px" }}>
-              <span>
-                <span style={{ fontWeight: 500 }}>{item.name}</span>{" "}
-                <span className="muted">· {TYPES[item.type].split(":")[0]}{item.durationDays ? ` · ${item.durationDays} д.` : ""}</span>
-              </span>
-              <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>{formatNumber(item.price)}</span>
-                <span className="muted">куплено {item._count.purchases}</span>
-                <span className={item.enabled ? "chip success" : "chip"}>{item.enabled ? "В продаже" : "Скрыт"}</span>
-              </span>
-            </summary>
-            <div style={{ padding: "4px 8px 14px" }}>
-              <ActionForm action={updateShopItem}>
-                <input type="hidden" name="id" value={item.id} />
-                <ItemFields item={item} roles={roles} />
-                <div className="form-actions">
-                  <SubmitButton>Сохранить товар</SubmitButton>
-                </div>
-              </ActionForm>
-              <ActionForm action={deleteShopItem} confirm={`Удалить товар «${item.name}»?`}>
-                <input type="hidden" name="id" value={item.id} />
-                <div className="form-actions" style={{ marginTop: 0 }}>
-                  <SubmitButton variant="danger">Удалить товар</SubmitButton>
-                </div>
-              </ActionForm>
-            </div>
-          </details>
-        ))}
-      </div>
-
-      <div className="card">
-        <div className="card-head"><h2>Новый товар</h2></div>
-        <ActionForm action={createShopItem} resetOnSuccess>
-          <ItemFields roles={roles} />
-          <div className="form-actions">
-            <SubmitButton>Добавить товар</SubmitButton>
-          </div>
-        </ActionForm>
-      </div>
-
-      <div className="card">
-        <div className="card-head"><h2>История покупок</h2></div>
-        {recent.length === 0 ? (
-          <p className="empty">Покупок пока нет.</p>
+      {tab === "items" &&
+        (items.length === 0 ? (
+          <EmptyState icon="store" title="Товаров пока нет" hint="Добавь первый на вкладке «Новый товар»." />
         ) : (
+          <div className="tiles">
+            {items.map((item) => (
+              <details key={item.id} className="edit setting" style={{ display: "block", padding: 0 }}>
+                <summary style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 14px" }}>
+                  <div className="setting-icon">
+                    <Icon name={TYPE_ICON[item.type]} />
+                  </div>
+                  <div className="setting-body">
+                    <div className="setting-title">{item.name}</div>
+                    <div className="setting-hint">
+                      {TYPES[item.type].split(":")[0]}
+                      {item.durationDays ? ` · ${item.durationDays} д.` : " · навсегда"}
+                      {` · куплено ${item._count.purchases}`}
+                    </div>
+                  </div>
+                  <div className="setting-control">
+                    <span style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{formatNumber(item.price)} скрапа</span>
+                    <span className={item.enabled ? "chip success" : "chip"}>{item.enabled ? "В продаже" : "Скрыт"}</span>
+                  </div>
+                </summary>
+                <div style={{ padding: "4px 14px 14px", borderTop: "1px solid var(--border)" }}>
+                  <div style={{ height: 12 }} />
+                  <ActionForm action={updateShopItem}>
+                    <input type="hidden" name="id" value={item.id} />
+                    <ItemFields item={item} roles={roles} />
+                    <div className="form-actions">
+                      <SubmitButton>Сохранить товар</SubmitButton>
+                    </div>
+                  </ActionForm>
+                  <ActionForm action={deleteShopItem} confirm={`Удалить товар «${item.name}»?`}>
+                    <input type="hidden" name="id" value={item.id} />
+                    <div className="form-actions" style={{ marginTop: 0 }}>
+                      <SubmitButton variant="danger">Удалить товар</SubmitButton>
+                    </div>
+                  </ActionForm>
+                </div>
+              </details>
+            ))}
+          </div>
+        ))}
+
+      {tab === "new" && (
+        <div className="card">
+          <ActionForm action={createShopItem} resetOnSuccess>
+            <ItemFields roles={roles} />
+            <div className="form-actions">
+              <SubmitButton>Добавить товар</SubmitButton>
+            </div>
+          </ActionForm>
+        </div>
+      )}
+
+      {tab === "history" && (
+        recent.length === 0 ? (
+          <EmptyState icon="package" title="Покупок пока нет" hint="Здесь появятся покупки игроков из /shop." />
+        ) : (
+        <div className="card">
           <table className="table">
             <thead><tr><th>Игрок</th><th>Товар</th><th className="num">Цена</th><th>Статус</th><th>Когда</th></tr></thead>
             <tbody>
@@ -150,8 +167,9 @@ export default async function ShopPage() {
               ))}
             </tbody>
           </table>
-        )}
-      </div>
+        </div>
+        )
+      )}
     </>
   );
 }

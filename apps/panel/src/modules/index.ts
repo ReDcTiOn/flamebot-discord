@@ -2,6 +2,7 @@
 //   1. добавь его таблицы в packages/core/prisma/schema.prisma (свой раздел);
 //   2. создай страницы в src/app/(panel)/<key>/;
 //   3. допиши модуль сюда. Бот должен отмечаться в BotStatus под тем же key.
+// Каждый модуль появляется отдельной иконкой в левой колонке панели.
 
 export interface ModuleNavItem {
   href: string;
@@ -9,12 +10,19 @@ export interface ModuleNavItem {
   icon: IconName;
 }
 
+export interface ModuleNavSection {
+  title: string | null;
+  items: ModuleNavItem[];
+}
+
 export interface PanelModule {
   key: string;
   title: string;
   description: string;
   icon: IconName;
-  nav: ModuleNavItem[];
+  // Цвет круглой иконки модуля в левой колонке.
+  color: string;
+  sections: ModuleNavSection[];
 }
 
 export type IconName =
@@ -28,7 +36,16 @@ export type IconName =
   | "coin"
   | "shield"
   | "list"
-  | "home";
+  | "home"
+  | "clock"
+  | "ruler"
+  | "repeat"
+  | "palette"
+  | "megaphone"
+  | "mic"
+  | "layers"
+  | "package"
+  | "search";
 
 export const modules: PanelModule[] = [
   {
@@ -36,14 +53,32 @@ export const modules: PanelModule[] = [
     title: "Scrap Rank",
     description: "Опыт за общение, ранги, репутация и магазин за скрап",
     icon: "coin",
-    nav: [
-      { href: "/rating", label: "Обзор", icon: "dashboard" },
-      { href: "/rating/xp", label: "Опыт и ранги", icon: "trending" },
-      { href: "/rating/rep", label: "Репутация", icon: "thumb" },
-      { href: "/rating/shop", label: "Магазин", icon: "store" },
-      { href: "/rating/members", label: "Пользователи", icon: "users" },
-      { href: "/rating/channels", label: "Каналы", icon: "hash" },
-      { href: "/rating/messages", label: "Сообщения", icon: "message" },
+    color: "#c9822a",
+    sections: [
+      { title: null, items: [{ href: "/rating", label: "Обзор", icon: "dashboard" }] },
+      {
+        title: "Рейтинг",
+        items: [
+          { href: "/rating/xp", label: "Опыт и ранги", icon: "trending" },
+          { href: "/rating/rep", label: "Репутация", icon: "thumb" },
+          { href: "/rating/members", label: "Игроки", icon: "users" },
+        ],
+      },
+      {
+        title: "Экономика",
+        items: [{ href: "/rating/shop", label: "Магазин", icon: "store" }],
+      },
+      {
+        title: "Настройки",
+        items: [
+          { href: "/rating/channels", label: "Каналы", icon: "hash" },
+          { href: "/rating/messages", label: "Сообщения", icon: "message" },
+        ],
+      },
     ],
   },
 ];
+
+export function moduleForPath(pathname: string): PanelModule | null {
+  return modules.find((m) => pathname === `/${m.key}` || pathname.startsWith(`/${m.key}/`)) ?? null;
+}
