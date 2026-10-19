@@ -1,0 +1,235 @@
+// Общая схема базы для веб-панели и ботов.
+// Панель задумана как единое место для нескольких ботов одного сервера Discord (GUILD_ID):
+//   - общие таблицы платформы: Panel*, Guild*, BotStatus, AdminSession, AuditLog;
+//   - таблицы каждого бота живут в своём разделе схемы (сейчас это рейтинг-бот).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===================== Платформа =====================
+
+// Единственная строка с id = 1.
+model PanelSettings {
+  id Int @id @default(1)
+  // Роли, которым открыт доступ к панели (кроме владельца и администраторов сервера).
+  panelRoleIds String[] @default([])
+  updatedAt    DateTime @updatedAt
+}
+
+// ===================== Рейтинг-бот (модуль "rating") =====================
+
+// Единственная строка с id = 1.
+model RatingSettings {
+  id Int @id @default(1)
+
+  xpMin            Int     @default(15)
+  xpMax            Int     @default(25)
+  xpCooldownSec    Int     @default(60)
+  minMessageLength Int     @default(5)
+  scrapPerAward    Int     @default(2)
+  voiceXpEnabled   Boolean @default(false)
+
+  announceRankUp    Boolean  @default(true)
+  announceChannelId String?
+  rankUpMessage     String   @default("{user} дорос до ранга «{rank}» и получает {reward} скрапа")
+  removeOldRankRoles Boolean @default(true)
+
+  ignoredChannelIds String[] @default([])
+  commandChannelIds String[] @default([])
+
+  repCooldownHours  Int @default(24)
+  repSameTargetDays Int @default(7)
+  repMinMemberDays  Int @default(3)
+
+  updatedAt DateTime @updatedAt
+}
+
+model Rank {
+  id          Int      @id @default(autoincrement())
+  name        String
+  emoji       String?
+  minXp       Int      @unique
+  roleId      String?
+  scrapReward Int      @default(0)
+  members     Member[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Member {
+  id           String    @id // Discord user id
+  username     String
+  displayName  String
+  avatarHash   String?
+  xp           Int       @default(0)
+  scrap        Int       @default(0)
+  rep          Int       @default(0)
+  messageCount Int       @default(0)
+  lastXpAt     DateTime?
+  rankId       Int?
+  rank         Rank?     @relation(fields: [rankId], references: [id], onDelete: SetNull)
+  // Награда за ранг выдаётся один раз: за ранги с порогом выше этого значения.
+  rewardedUpToXp Int     @default(0)
+  // Панель ставит флаг, когда меняет опыт или ранги; бот пересчитывает роли в фоне.
+  needsRoleSync Boolean  @default(false)
+  inGuild      Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  repGiven    RepTransaction[] @relation("RepGiver")
+  repReceived RepTransaction[] @relation("RepReceiver")
+  purchases   Purchase[]
+  badges      MemberBadge[]
+
+  @@index([xp(sort: Desc)])
+  @@index([rep(sort: Desc)])
+  @@index([scrap(sort: Desc)])
+  @@index([lastXpAt])
+  @@index([needsRoleSync])
+}
+
+model RepTransaction {
+  id         Int      @id @default(autoincrement())
+  giverId    String
+  receiverId String
+  amount     Int      @default(1)
+  giver      Member   @relation("RepGiver", fields: [giverId], references: [id], onDelete: Cascade)
+  receiver   Member   @relation("RepReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@index([giverId, createdAt])
+  @@index([giverId, receiverId, createdAt])
+}
+
+enum ShopItemType {
+  ROLE        // готовая роль сервера (например, цвет ника)
+  CUSTOM_ROLE // личная роль: название и цвет выбирает покупатель
+  BADGE       // бейдж в профиль
+}
+
+model ShopItem {
+  id           Int          @id @default(autoincrement())
+  name         String
+  description  String       @default("")
+  type         ShopItemType
+  price        Int
+  roleId       String?
+  durationDays Int?
+  badgeLabel   String?
+  enabled      Boolean      @default(true)
+  stock        Int?
+  sortOrder    Int          @default(0)
+  purchases    Purchase[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+model Purchase {
+  id         Int       @id @default(autoincrement())
+  memberId   String
+  itemId     Int
+  price      Int
+  roleId     String?
+  customName String?
+  expiresAt  DateTime?
+  active     Boolean   @default(true)
+  member     Member    @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  item       ShopItem  @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  createdAt  DateTime  @default(now())
+
+  @@index([active, expiresAt])
+  @@index([memberId])
+}
+
+model MemberBadge {
+  id        Int      @id @default(autoincrement())
+  memberId  String
+  label     String
+  member    Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([memberId, label])
+}
+
+model DailyStat {
+  date       DateTime @id @db.Date
+  messages   Int      @default(0)
+  xpAwarded  Int      @default(0)
+  scrapSpent Int      @default(0)
+}
+
+// ===================== Платформа: общие данные сервера =====================
+
+// Снимок ролей и каналов сервера. Его пишет бот, панель только читает,
+// поэтому токены ботов веб-панели не нужны.
+model GuildRole {
+  id          String   @id
+  name        String
+  color       Int
+  position    Int
+  permissions String
+  managed     Boolean
+  updatedAt   DateTime @updatedAt
+}
+
+model GuildChannel {
+  id        String   @id
+  name      String
+  type      Int
+  position  Int
+  parentId  String?
+  updatedAt DateTime @updatedAt
+}
+
+// Единственная строка с id = 1. Пишет любой бот платформы.
+model GuildInfo {
+  id          Int      @id @default(1)
+  name        String
+  iconHash    String?
+  ownerId     String
+  memberCount Int
+  updatedAt   DateTime @updatedAt
+}
+
+// Каждый бот раз в минуту отмечается здесь под своим ключом (например, "rating").
+model BotStatus {
+  botKey      String   @id
+  heartbeatAt DateTime
+}
+
+model AdminSession {
+  id             String   @id // sha256 от токена из cookie; сам токен в базе не хранится
+  userId         String
+  username       String
+  avatarHash     String?
+  isGuildAdmin   Boolean
+  accessTokenEnc String // OAuth-токен Discord, зашифрован AES-256-GCM
+  ip             String?
+  userAgent      String?
+  expiresAt      DateTime
+  lastVerifiedAt DateTime
+  createdAt      DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  module    String   // "panel", "rating", ...
+  actorId   String
+  actorName String
+  action    String
+  target    String?
+  details   Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt(sort: Desc)])
+  @@index([module, createdAt(sort: Desc)])
+}

@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.next/
+out/
+coverage/
+*.log
+*.tsbuildinfo
+next-env.d.ts
+
+# Секреты. Никогда не коммитим.
+.env
+.env.*
+!.env.example
+*.pem
+*.key

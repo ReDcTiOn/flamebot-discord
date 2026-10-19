@@ -1,0 +1,91 @@
+# Продакшен-запуск: docker compose up -d --build
+# Переменные берутся из файла .env рядом с этим файлом (образец: .env.example).
+# Каждый сервис получает только свои секреты: бот не знает секрет OAuth, панель не знает токен бота.
+
+x-hardening: &hardening
+  restart: unless-stopped
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  tmpfs:
+    - /tmp
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: flamebot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Задай POSTGRES_PASSWORD в .env}
+      POSTGRES_DB: flamebot
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flamebot -d flamebot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    # Порт наружу не публикуется: база доступна только сервисам внутри сети compose.
+    networks: [internal]
+
+  migrate:
+    build:
+      context: .
+      target: build
+    command: ["pnpm", "-F", "@flamebot/core", "db:deploy"]
+    environment:
+      DATABASE_URL: postgresql://flamebot:${POSTGRES_PASSWORD}@db:5432/flamebot
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    networks: [internal]
+
+  rating-bot:
+    <<: *hardening
+    build:
+      context: .
+      target: rating-bot
+    environment:
+      DISCORD_TOKEN: ${DISCORD_TOKEN:?Задай DISCORD_TOKEN в .env}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:?Задай DISCORD_CLIENT_ID в .env}
+      GUILD_ID: ${GUILD_ID:?Задай GUILD_ID в .env}
+      DATABASE_URL: postgresql://flamebot:${POSTGRES_PASSWORD}@db:5432/flamebot
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks: [internal, egress]
+
+  panel:
+    <<: *hardening
+    build:
+      context: .
+      target: panel
+    environment:
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID}
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:?Задай DISCORD_CLIENT_SECRET в .env}
+      GUILD_ID: ${GUILD_ID}
+      PANEL_URL: ${PANEL_URL:?Задай PANEL_URL в .env}
+      SESSION_SECRET: ${SESSION_SECRET:?Задай SESSION_SECRET в .env}
+      TRUST_PROXY: ${TRUST_PROXY:-true}
+      DATABASE_URL: postgresql://flamebot:${POSTGRES_PASSWORD}@db:5432/flamebot
+    tmpfs:
+      - /tmp
+      - /app/apps/panel/.next/cache
+    # Слушает только localhost. Наружу — через reverse proxy с HTTPS (см. README).
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks: [internal, egress]
+
+networks:
+  internal:
+    internal: true
+  egress: {}
+
+volumes:
+  pgdata:

@@ -1,0 +1,31 @@
+{
+  "name": "flamebot-discord",
+  "private": true,
+  "packageManager": "pnpm@10.33.4",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "pnpm -F @flamebot/core build && pnpm -F rating-bot build && pnpm -F panel build",
+    "typecheck": "pnpm -F @flamebot/core build && pnpm -r typecheck",
+    "test": "pnpm -F @flamebot/core test",
+    "db:generate": "pnpm -F @flamebot/core db:generate",
+    "db:migrate": "pnpm -F @flamebot/core db:migrate",
+    "db:deploy": "pnpm -F @flamebot/core db:deploy",
+    "dev:rating-bot": "pnpm -F @flamebot/core build && pnpm -F rating-bot dev",
+    "dev:panel": "pnpm -F @flamebot/core build && pnpm -F panel dev",
+    "deploy-commands": "pnpm -F rating-bot deploy-commands"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma",
+      "esbuild",
+      "sharp"
+    ],
+    "overrides": {
+      "deepmerge-ts": "^8.0.0"
+    }
+  }
+}
