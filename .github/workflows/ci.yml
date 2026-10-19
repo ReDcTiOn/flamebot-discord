@@ -15,7 +15,7 @@ jobs:
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: pnpm/action-setup@v4
