@@ -40,21 +40,16 @@ async function leaveForeignGuild(guild: Guild) {
   await guild.leave().catch((err) => log.error("Не удалось выйти с сервера", err));
 }
 
-client.once(Events.ClientReady, async (c) => {
-  log.info(`Бот запущен как ${c.user.tag}`);
-  await ensureRatingDefaults(prisma);
+let guildReady = false;
 
-  for (const guild of c.guilds.cache.values()) await leaveForeignGuild(guild);
-
-  const guild = c.guilds.cache.get(config.GUILD_ID);
-  if (!guild) {
-    log.error(`Бот не добавлен на сервер ${config.GUILD_ID}. Пригласи его по ссылке из README.`);
-    return;
-  }
+// Запуск работы на нашем сервере. Вызывается при старте или когда бота пригласили позже.
+async function setupGuild(guild: Guild) {
+  if (guildReady) return;
+  guildReady = true;
 
   // Регистрируем команды при каждом запуске: так они всегда совпадают с кодом.
   try {
-    await c.rest.put(Routes.applicationGuildCommands(c.application.id, guild.id), {
+    await client.rest.put(Routes.applicationGuildCommands(client.application!.id, guild.id), {
       body: commands.map((cmd) => cmd.data),
     });
     log.info(`Команды зарегистрированы: ${commands.length}`);
@@ -66,13 +61,31 @@ client.once(Events.ClientReady, async (c) => {
   await guild.channels.fetch();
   await syncGuildSnapshot(guild);
   await heartbeat(guild);
+  log.info(`Работаю на сервере «${guild.name}»`);
 
   every(() => heartbeat(guild), 60_000);
   every(() => syncGuildSnapshot(guild), 15 * 60_000);
   startJobs(guild, every);
+}
+
+client.once(Events.ClientReady, async (c) => {
+  log.info(`Бот запущен как ${c.user.tag}`);
+  await ensureRatingDefaults(prisma);
+
+  for (const guild of c.guilds.cache.values()) await leaveForeignGuild(guild);
+
+  const guild = c.guilds.cache.get(config.GUILD_ID);
+  if (!guild) {
+    log.warn(`Бот ещё не добавлен на сервер ${config.GUILD_ID}. Жду приглашения по ссылке из README.`);
+    return;
+  }
+  await setupGuild(guild);
 });
 
-client.on(Events.GuildCreate, (guild) => void leaveForeignGuild(guild));
+client.on(Events.GuildCreate, (guild) => {
+  if (guild.id === config.GUILD_ID) void setupGuild(guild).catch((err) => log.error("Ошибка запуска на сервере", err));
+  else void leaveForeignGuild(guild);
+});
 client.on(Events.MessageCreate, (message) => void handleMessageXp(message));
 client.on(Events.InteractionCreate, (interaction) => void handleInteraction(interaction));
 
