@@ -124,8 +124,7 @@ kbd {
 }
 .icon-btn:hover { background: var(--surface-2); color: var(--text); }
 
-/* Контент — колонкой по центру, как в макете. */
-.main { padding: 40px 48px 72px; max-width: 840px; width: 100%; margin-inline: auto; }
+.main { padding: 40px 48px 72px; max-width: 1040px; width: 100%; }
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
 .page-head p { color: var(--text-secondary); margin-top: 6px; font-size: 14px; }
 
