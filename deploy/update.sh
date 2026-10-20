@@ -88,7 +88,10 @@ start() {
 }
 
 if start && check; then
+  # Старые образы и кэш сборки копятся с каждым обновлением и за пару месяцев забивают диск.
+  # Кэш, которым пользовались за последнюю неделю, остаётся: следующая сборка будет быстрой.
   docker image prune -f >/dev/null
+  docker builder prune -f --filter until=168h >/dev/null || true
   say "Готово: $(git log -1 --format='%h %s')"
   if [[ $next != "$prev" ]]; then
     echo "Изменения:"
