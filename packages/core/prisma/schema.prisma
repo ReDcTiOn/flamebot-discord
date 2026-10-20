@@ -29,17 +29,18 @@ model RatingSettings {
   id Int @id @default(1)
 
   // Значения по умолчанию для рангов, где своё начисление не задано. Точность — сотые.
-  xpMin            Decimal @default(15) @db.Decimal(10, 2)
-  xpMax            Decimal @default(25) @db.Decimal(10, 2)
-  xpCooldownSec    Int     @default(60)
+  // Стартовые значения — как настроено на FLAME RUST.
+  xpMin            Decimal @default(0.01) @db.Decimal(10, 2)
+  xpMax            Decimal @default(0.02) @db.Decimal(10, 2)
+  xpCooldownSec    Int     @default(5)
   minMessageLength Int     @default(5)
-  scrapPerAward    Decimal @default(2) @db.Decimal(10, 2)
+  scrapPerAward    Decimal @default(0.03) @db.Decimal(10, 2)
   voiceXpEnabled   Boolean @default(false)
 
   announceRankUp    Boolean  @default(true)
   announceChannelId String?
   rankUpMessage     String   @default("{user} дорос до ранга «{rank}» и получает {reward} скрапа")
-  removeOldRankRoles Boolean @default(true)
+  removeOldRankRoles Boolean @default(false)
 
   // Каналы, где начисляется опыт. Пустой список — опыт начисляется во всех каналах.
   xpChannelIds      String[] @default([])
