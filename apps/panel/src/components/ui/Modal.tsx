@@ -13,6 +13,9 @@ export function useModal(): ModalApi | null {
   return useContext(ModalContext);
 }
 
+// Даёт «Отмене» и ActionForm закрыть не только окно, но и любую раскрывающуюся форму.
+export const ModalProvider = ModalContext.Provider;
+
 export function Modal({
   open,
   onClose,

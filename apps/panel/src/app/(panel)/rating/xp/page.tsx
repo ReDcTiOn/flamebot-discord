@@ -1,6 +1,7 @@
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { formatNumber, getRatingSettings, messageReward, prisma, type Rank } from "@flamebot/core";
 import { ActionForm, IconSubmit, SubmitButton } from "@/components/ActionForm";
+import { ExpandableRow } from "@/components/ui/ExpandableRow";
 import { EmptyState, FieldRow, NumberInput, PageHead, RoleSelect, Section, Switch, Tabs, pickTab } from "@/components/Fields";
 import { ModalCancel, ModalTrigger } from "@/components/ui/Modal";
 import { requirePage } from "@/lib/auth";
@@ -172,13 +173,16 @@ export default async function XpPage({ searchParams }: { searchParams: Promise<{
             ) : (
               <div className="tiles">
                 {ranks.map((r, i) => (
-                  <div key={r.id} className="setting">
-                    <div className="setting-icon rank-emoji" aria-hidden="true">
-                      {r.emoji || i + 1}
-                    </div>
-                    <div className="setting-body">
-                      <div className="setting-title">{r.name}</div>
-                      <div className="setting-hint">
+                  <ExpandableRow
+                    key={r.id}
+                    icon={
+                      <div className="setting-icon rank-emoji" aria-hidden="true">
+                        {r.emoji || i + 1}
+                      </div>
+                    }
+                    title={r.name}
+                    hint={
+                      <>
                         от {r.minXp.toLocaleString("ru-RU")} опыта
                         {r.roleId ? ` · роль @${roleName.get(r.roleId) ?? "удалена"}` : " · без роли"}
                         {r.scrapReward > 0 ? ` · награда ${r.scrapReward.toLocaleString("ru-RU")} скрапа` : ""}
@@ -187,25 +191,10 @@ export default async function XpPage({ searchParams }: { searchParams: Promise<{
                           const own = r.xpMin !== null || r.scrapPerMessage !== null;
                           return ` · за сообщение ${formatNumber(m.xpMin)}–${formatNumber(m.xpMax)} опыта и ${formatNumber(m.scrap)} скрапа${own ? "" : " (общие)"}`;
                         })()}
-                      </div>
-                    </div>
-                    <div className="row-actions">
-                      <ModalTrigger
-                        label={<Pencil size={15} aria-hidden="true" />}
-                        buttonClass="icon-btn bordered"
-                        buttonLabel={`Изменить ранг «${r.name}»`}
-                        title={`Ранг «${r.name}»`}
-                        description="Роли участников пересчитаются в фоне после сохранения."
-                      >
-                        <ActionForm action={updateRank}>
-                          <input type="hidden" name="id" value={r.id} />
-                          <RankFields roles={roles} rank={r} defaults={defaults} />
-                          <div className="modal-actions">
-                            <ModalCancel />
-                            <SubmitButton>Сохранить</SubmitButton>
-                          </div>
-                        </ActionForm>
-                      </ModalTrigger>
+                      </>
+                    }
+                    toggleLabel={`Изменить ранг «${r.name}»`}
+                    actions={
                       <ActionForm
                         action={deleteRank}
                         confirm={`Удалить ранг «${r.name}»?`}
@@ -218,8 +207,18 @@ export default async function XpPage({ searchParams }: { searchParams: Promise<{
                           <Trash2 size={15} aria-hidden="true" />
                         </IconSubmit>
                       </ActionForm>
-                    </div>
-                  </div>
+                    }
+                  >
+                    <ActionForm action={updateRank}>
+                      <input type="hidden" name="id" value={r.id} />
+                      <RankFields roles={roles} rank={r} defaults={defaults} />
+                      <div className="modal-actions">
+                        <span className="muted spacer">Роли участников пересчитаются в фоне после сохранения.</span>
+                        <ModalCancel />
+                        <SubmitButton>Сохранить</SubmitButton>
+                      </div>
+                    </ActionForm>
+                  </ExpandableRow>
                 ))}
               </div>
             )}

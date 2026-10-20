@@ -473,7 +473,8 @@ a.member-link:hover { color: #7fb0ff; }
 
 /* Запуск и остановка бота */
 .bot-power { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.bot-power form { display: inline; }
+/* Только формы прямо в строке: формы внутри всплывающих окон не трогаем. */
+.bot-power > form { display: inline; }
 .head-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
 .rail-status.paused { background: var(--text-muted); }
 .rail-status.pending { background: var(--warning); }
@@ -486,4 +487,19 @@ a.member-link:hover { color: #7fb0ff; }
 .icon-btn.bordered { border-color: var(--border-strong); background: var(--surface-2); color: var(--text-secondary); }
 .icon-btn.bordered:hover { background: var(--surface-3); color: var(--text); }
 .icon-btn.bordered.danger:hover { color: var(--danger); background: var(--danger-bg); border-color: #4a2220; }
-.row-actions form { display: inline-flex; }
+.row-actions > form { display: inline-flex; }
+
+/* Строка с раскрывающейся формой редактирования */
+.expandable.open > .setting { border-bottom-left-radius: 0; border-bottom-right-radius: 0; background: var(--tile-hover); }
+.expandable-panel {
+  background: var(--tile); border: 1px solid var(--border); border-top: 0;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg); padding: 16px 18px 18px;
+  animation: expand-in 0.14s ease-out;
+}
+.expandable-panel[hidden] { display: none; }
+.expandable-panel .grid { gap: 12px; }
+.expand-toggle svg { transition: transform 0.16s ease; }
+.expand-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.expand-toggle[aria-expanded="true"] { border-color: var(--border-strong); color: var(--text); }
+@keyframes expand-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .expandable-panel { animation: none; } .expand-toggle svg { transition: none; } }
