@@ -77,7 +77,7 @@ export const CARD_PLACEHOLDERS: { key: string; label: string }[] = [
   { key: "{server}", label: "название сервера" },
 ];
 
-const nf = new Intl.NumberFormat("ru-RU");
+const nf = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 });
 
 // Эмодзи в картинке без отдельного шрифта рисуются квадратиками, поэтому убираем их.
 export function stripEmoji(text: string): string {

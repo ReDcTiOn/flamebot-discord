@@ -1,4 +1,5 @@
-import type { Prisma, PrismaClient } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
+import type { Db } from "./db.js";
 
 export type EventLevelName = "INFO" | "WARN" | "ERROR";
 
@@ -12,7 +13,7 @@ export interface BotEventInput {
 }
 
 // Запись события в историю. Ошибка записи не должна ломать то, что событие описывает.
-export async function recordEvent(db: PrismaClient, e: BotEventInput): Promise<void> {
+export async function recordEvent(db: Db, e: BotEventInput): Promise<void> {
   try {
     await db.botEvent.create({
       data: {

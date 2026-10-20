@@ -91,8 +91,39 @@ export function Switch({ name, defaultChecked, disabled, label }: { name: string
   );
 }
 
-export function NumberInput({ name, defaultValue, min, max, label }: { name: string; defaultValue: number | null; min?: number; max?: number; label?: string }) {
-  return <input type="number" name={name} defaultValue={defaultValue ?? ""} min={min} max={max} step={1} required aria-label={label} />;
+export function NumberInput({
+  name,
+  defaultValue,
+  min,
+  max,
+  label,
+  step = 1,
+  required = true,
+  placeholder,
+}: {
+  name: string;
+  defaultValue: number | null;
+  min?: number;
+  max?: number;
+  label?: string;
+  step?: number;
+  required?: boolean;
+  placeholder?: string;
+}) {
+  return (
+    <input
+      type="number"
+      name={name}
+      defaultValue={defaultValue ?? ""}
+      min={min}
+      max={max}
+      step={step}
+      required={required}
+      placeholder={placeholder}
+      aria-label={label}
+      inputMode={step < 1 ? "decimal" : "numeric"}
+    />
+  );
 }
 
 // Опасные роли (с правами модерации) видны, но выбрать их нельзя.

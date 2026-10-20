@@ -10,8 +10,11 @@ export function startOfUtcDay(date = new Date()): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
 
+const nf = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 });
+
+// 1 245, 0,01, 12 480,5 — до двух знаков после запятой, лишние нули не показываются.
 export function formatNumber(n: number): string {
-  return new Intl.NumberFormat("ru-RU").format(n);
+  return nf.format(n);
 }
 
 export function randomInt(min: number, max: number): number {

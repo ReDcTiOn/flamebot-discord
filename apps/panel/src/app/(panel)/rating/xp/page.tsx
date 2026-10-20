@@ -1,5 +1,5 @@
 import { Plus } from "lucide-react";
-import { getRatingSettings, prisma, type Rank } from "@flamebot/core";
+import { formatNumber, getRatingSettings, messageReward, prisma, type Rank } from "@flamebot/core";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { EmptyState, FieldRow, NumberInput, PageHead, RoleSelect, Section, Switch, Tabs, pickTab } from "@/components/Fields";
 import { ModalCancel, ModalTrigger } from "@/components/ui/Modal";
@@ -16,7 +16,7 @@ const TABS = [
 
 type Roles = Awaited<ReturnType<typeof listRoles>>;
 
-function RankFields({ roles, rank }: { roles: Roles; rank?: Rank }) {
+function RankFields({ roles, rank, defaults }: { roles: Roles; rank?: Rank; defaults: { xpMin: number; xpMax: number; scrap: number } }) {
   return (
     <div className="form-grid">
       <div className="grid" style={{ gridTemplateColumns: "1fr 96px" }}>
@@ -39,6 +39,23 @@ function RankFields({ roles, rank }: { roles: Roles; rank?: Rank }) {
           <input type="number" name="scrapReward" defaultValue={rank?.scrapReward ?? 0} min={0} required className="wide" />
         </label>
       </div>
+      <fieldset className="rank-rewards">
+        <legend className="prop-label">За одно сообщение на этом ранге — пусто значит «как в общих настройках»</legend>
+        <div className="grid grid-3">
+          <label className="stack">
+            <span>Опыт от</span>
+            <input type="number" name="xpMin" defaultValue={rank?.xpMin ?? ""} min={0} max={1000} step={0.01} inputMode="decimal" className="wide" placeholder={String(defaults.xpMin)} />
+          </label>
+          <label className="stack">
+            <span>Опыт до</span>
+            <input type="number" name="xpMax" defaultValue={rank?.xpMax ?? ""} min={0} max={1000} step={0.01} inputMode="decimal" className="wide" placeholder={String(defaults.xpMax)} />
+          </label>
+          <label className="stack">
+            <span>Скрап</span>
+            <input type="number" name="scrapPerMessage" defaultValue={rank?.scrapPerMessage ?? ""} min={0} max={1000} step={0.01} inputMode="decimal" className="wide" placeholder={String(defaults.scrap)} />
+          </label>
+        </div>
+      </fieldset>
       <label className="stack">
         <span>Роль Discord, которую выдаёт бот</span>
         <RoleSelect name="roleId" roles={roles} defaultValue={rank?.roleId ?? null} />
@@ -57,9 +74,20 @@ export default async function XpPage({ searchParams }: { searchParams: Promise<{
   ]);
 
   const roleName = new Map(roles.map((r) => [r.id, r.name]));
-  const avgGain = (s.xpMin + s.xpMax) / 2;
+  const defaults = { xpMin: s.xpMin, xpMax: s.xpMax, scrap: s.scrapPerAward };
   const top = ranks.at(-1);
-  const messagesToTop = top && avgGain > 0 ? Math.ceil(top.minXp / avgGain) : null;
+  // Идём по лестнице: на каждом отрезке своё среднее начисление за сообщение.
+  let messagesToTop: number | null = top ? 0 : null;
+  for (let i = 0; top && messagesToTop !== null && i < ranks.length - 1; i++) {
+    const r = messageReward(s, ranks[i]!);
+    const avg = (r.xpMin + r.xpMax) / 2;
+    const span = ranks[i + 1]!.minXp - ranks[i]!.minXp;
+    messagesToTop = avg > 0 ? messagesToTop + Math.ceil(span / avg) : null;
+  }
+  if (top && ranks[0] && ranks[0].minXp > 0 && messagesToTop !== null) {
+    const avg = (s.xpMin + s.xpMax) / 2;
+    messagesToTop = avg > 0 ? messagesToTop + Math.ceil(ranks[0].minXp / avg) : null;
+  }
   const hoursToTop = messagesToTop ? Math.round((messagesToTop * s.xpCooldownSec) / 3600) : null;
 
   return (
@@ -71,10 +99,10 @@ export default async function XpPage({ searchParams }: { searchParams: Promise<{
         <ActionForm action={saveXpSettings}>
           <Section title="Сообщения" hint="Сколько опыта и скрапа приносит одно сообщение">
             <div className="tiles">
-              <FieldRow icon="trending" label="Опыт за сообщение" hint="Случайное значение в диапазоне от и до">
-                <NumberInput name="xpMin" defaultValue={s.xpMin} min={0} max={1000} label="Минимум опыта" />
+              <FieldRow icon="trending" label="Опыт за сообщение" hint="Случайное значение от и до, можно с сотыми: 0.01. Для ранга можно задать своё">
+                <NumberInput name="xpMin" defaultValue={s.xpMin} min={0} max={1000} step={0.01} label="Минимум опыта" />
                 <span className="muted">–</span>
-                <NumberInput name="xpMax" defaultValue={s.xpMax} min={0} max={1000} label="Максимум опыта" />
+                <NumberInput name="xpMax" defaultValue={s.xpMax} min={0} max={1000} step={0.01} label="Максимум опыта" />
               </FieldRow>
               <FieldRow icon="clock" label="Кулдаун, секунд" hint="Чаще этого опыт одному человеку не начисляется">
                 <NumberInput name="xpCooldownSec" defaultValue={s.xpCooldownSec} min={5} max={3600} label="Кулдаун" />
@@ -82,8 +110,8 @@ export default async function XpPage({ searchParams }: { searchParams: Promise<{
               <FieldRow icon="ruler" label="Минимальная длина сообщения" hint="Короткие «ок» и «+» опыт не дают">
                 <NumberInput name="minMessageLength" defaultValue={s.minMessageLength} min={0} max={500} label="Минимальная длина" />
               </FieldRow>
-              <FieldRow icon="coin" label="Скрап за начисление опыта" hint="Начисляется вместе с опытом">
-                <NumberInput name="scrapPerAward" defaultValue={s.scrapPerAward} min={0} max={1000} label="Скрап" />
+              <FieldRow icon="coin" label="Скрап за начисление опыта" hint="Начисляется вместе с опытом, можно с сотыми. Для ранга можно задать своё">
+                <NumberInput name="scrapPerAward" defaultValue={s.scrapPerAward} min={0} max={1000} step={0.01} label="Скрап" />
               </FieldRow>
               <FieldRow icon="mic" label="Опыт за голосовые каналы" hint="Появится в следующих версиях">
                 <Switch name="voiceXpEnabled" defaultChecked={false} disabled label="Опыт за голосовые каналы" />
@@ -130,7 +158,7 @@ export default async function XpPage({ searchParams }: { searchParams: Promise<{
                 description="Роли с правами модерации выбрать нельзя: бот их не выдаёт."
               >
                 <ActionForm action={createRank} resetOnSuccess>
-                  <RankFields roles={roles} />
+                  <RankFields roles={roles} defaults={defaults} />
                   <div className="modal-actions">
                     <ModalCancel />
                     <SubmitButton>Добавить ранг</SubmitButton>
@@ -154,13 +182,18 @@ export default async function XpPage({ searchParams }: { searchParams: Promise<{
                         от {r.minXp.toLocaleString("ru-RU")} опыта
                         {r.roleId ? ` · роль @${roleName.get(r.roleId) ?? "удалена"}` : " · без роли"}
                         {r.scrapReward > 0 ? ` · награда ${r.scrapReward.toLocaleString("ru-RU")} скрапа` : ""}
+                        {(() => {
+                          const m = messageReward(s, r);
+                          const own = r.xpMin !== null || r.scrapPerMessage !== null;
+                          return ` · за сообщение ${formatNumber(m.xpMin)}–${formatNumber(m.xpMax)} опыта и ${formatNumber(m.scrap)} скрапа${own ? "" : " (общие)"}`;
+                        })()}
                       </div>
                     </div>
                     <div className="row-actions">
                       <ModalTrigger label="Изменить" buttonClass="btn small" title={`Ранг «${r.name}»`} description="Роли участников пересчитаются в фоне после сохранения.">
                         <ActionForm action={updateRank}>
                           <input type="hidden" name="id" value={r.id} />
-                          <RankFields roles={roles} rank={r} />
+                          <RankFields roles={roles} rank={r} defaults={defaults} />
                           <div className="modal-actions">
                             <ModalCancel />
                             <SubmitButton>Сохранить</SubmitButton>

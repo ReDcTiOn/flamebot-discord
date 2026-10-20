@@ -146,7 +146,7 @@ export default async function MemberPage({ params, searchParams }: { params: Pro
                 </label>
                 <label className="stack">
                   <span>Изменение</span>
-                  <input type="number" name="delta" placeholder="250 или -100" required className="wide" />
+                  <input type="number" name="delta" placeholder="250, -100 или 0.5" step={0.01} inputMode="decimal" required className="wide" />
                 </label>
               </div>
               <label className="stack" style={{ marginTop: 12 }}>

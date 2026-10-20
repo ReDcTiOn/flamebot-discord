@@ -478,3 +478,6 @@ a.member-link:hover { color: #7fb0ff; }
 .rail-status.paused { background: var(--text-muted); }
 .rail-status.pending { background: var(--warning); }
 .rail-status.off { background: var(--danger); }
+
+.rank-rewards { border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px 12px; margin: 0; }
+.rank-rewards legend { padding: 0 6px; }

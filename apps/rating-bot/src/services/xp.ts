@@ -1,5 +1,5 @@
 import type { Message } from "discord.js";
-import { prisma, randomInt, startOfUtcDay } from "@flamebot/core";
+import { messageReward, prisma, randomHundredths, rankForXp, round2, startOfUtcDay } from "@flamebot/core";
 import { config } from "../config.js";
 import { log } from "../logger.js";
 import { getState } from "../state.js";
@@ -37,11 +37,16 @@ export async function handleMessageXp(message: Message): Promise<void> {
   if (now - prev < settings.xpCooldownSec * 1000) return;
   lastAward.set(message.author.id, now);
 
-  const gain = randomInt(settings.xpMin, settings.xpMax);
-  const scrap = settings.scrapPerAward;
   const user = message.author;
 
   try {
+    // Сколько дать, зависит от текущего ранга игрока: у ранга может быть своё начисление.
+    const current = await prisma.member.findUnique({ where: { id: user.id }, select: { xp: true, rankId: true } });
+    const rank = current ? (ranks.find((r) => r.id === current.rankId) ?? rankForXp(ranks, current.xp)) : rankForXp(ranks, 0);
+    const perMessage = messageReward(settings, rank);
+    const gain = randomHundredths(perMessage.xpMin, perMessage.xpMax);
+    const scrap = round2(perMessage.scrap);
+
     const row = await prisma.member.upsert({
       where: { id: user.id },
       create: {

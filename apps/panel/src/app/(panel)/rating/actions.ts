@@ -8,6 +8,7 @@ import {
   messageSettingsSchema,
   prisma,
   rankSchema,
+  round2,
   repSettingsSchema,
   shopItemSchema,
   xpSettingsSchema,
@@ -16,7 +17,7 @@ import { cardAssetIds, cardLayoutSchema } from "@flamebot/core/card";
 import { ActionError, audit, runAction, type ActionResult } from "@/lib/auth";
 import { sanitizeImage } from "@/lib/images";
 import { rateLimit } from "@/lib/rateLimit";
-import { bool, idParam, ids, int, intOrNull, str, strOrNull } from "@/lib/form";
+import { bool, dec, decOrNull, idParam, ids, int, intOrNull, str, strOrNull } from "@/lib/form";
 import { assertChannels, assertGrantableRole } from "@/lib/guild";
 
 const MODULE = "rating";
@@ -33,11 +34,11 @@ async function queueRoleSyncForAll() {
 export async function saveXpSettings(_prev: ActionResult, fd: FormData): Promise<ActionResult> {
   return runAction("any", async (user) => {
     const data = xpSettingsSchema.parse({
-      xpMin: int(fd, "xpMin"),
-      xpMax: int(fd, "xpMax"),
+      xpMin: dec(fd, "xpMin"),
+      xpMax: dec(fd, "xpMax"),
       xpCooldownSec: int(fd, "xpCooldownSec"),
       minMessageLength: int(fd, "minMessageLength"),
-      scrapPerAward: int(fd, "scrapPerAward"),
+      scrapPerAward: dec(fd, "scrapPerAward"),
       announceRankUp: bool(fd, "announceRankUp"),
       removeOldRankRoles: bool(fd, "removeOldRankRoles"),
     });
@@ -100,6 +101,9 @@ function parseRank(fd: FormData) {
     minXp: int(fd, "minXp"),
     roleId: strOrNull(fd, "roleId"),
     scrapReward: int(fd, "scrapReward"),
+    xpMin: decOrNull(fd, "xpMin"),
+    xpMax: decOrNull(fd, "xpMax"),
+    scrapPerMessage: decOrNull(fd, "scrapPerMessage"),
   });
 }
 
@@ -203,15 +207,16 @@ export async function adjustMember(_prev: ActionResult, fd: FormData): Promise<A
     const data = memberAdjustSchema.parse({
       memberId: str(fd, "memberId"),
       field: str(fd, "field"),
-      delta: int(fd, "delta"),
+      delta: dec(fd, "delta"),
       reason: str(fd, "reason"),
     });
     if (data.delta === 0) throw new ActionError("Изменение не может быть нулевым");
+    if (data.field === "rep" && !Number.isInteger(data.delta)) throw new ActionError("Репутация меняется только целыми числами");
 
     const member = await prisma.$transaction(async (tx) => {
       const current = await tx.member.findUnique({ where: { id: data.memberId } });
       if (!current) throw new ActionError("Игрок не найден");
-      const next = Math.max(0, current[data.field] + data.delta);
+      const next = Math.max(0, round2(current[data.field] + data.delta));
       return tx.member.update({
         where: { id: data.memberId },
         data: { [data.field]: next, ...(data.field === "xp" ? { needsRoleSync: true } : {}) },

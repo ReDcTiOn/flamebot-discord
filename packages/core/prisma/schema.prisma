@@ -28,11 +28,12 @@ model PanelSettings {
 model RatingSettings {
   id Int @id @default(1)
 
-  xpMin            Int     @default(15)
-  xpMax            Int     @default(25)
+  // Значения по умолчанию для рангов, где своё начисление не задано. Точность — сотые.
+  xpMin            Decimal @default(15) @db.Decimal(10, 2)
+  xpMax            Decimal @default(25) @db.Decimal(10, 2)
   xpCooldownSec    Int     @default(60)
   minMessageLength Int     @default(5)
-  scrapPerAward    Int     @default(2)
+  scrapPerAward    Decimal @default(2) @db.Decimal(10, 2)
   voiceXpEnabled   Boolean @default(false)
 
   announceRankUp    Boolean  @default(true)
@@ -66,6 +67,10 @@ model Rank {
   minXp       Int      @unique
   roleId      String?
   scrapReward Int      @default(0)
+  // Начисление за сообщение на этом ранге. null — как в общих настройках.
+  xpMin           Decimal? @db.Decimal(10, 2)
+  xpMax           Decimal? @db.Decimal(10, 2)
+  scrapPerMessage Decimal? @db.Decimal(10, 2)
   members     Member[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -76,8 +81,8 @@ model Member {
   username     String
   displayName  String
   avatarHash   String?
-  xp           Int       @default(0)
-  scrap        Int       @default(0)
+  xp           Decimal   @default(0) @db.Decimal(14, 2)
+  scrap        Decimal   @default(0) @db.Decimal(14, 2)
   rep          Int       @default(0)
   messageCount Int       @default(0)
   lastXpAt     DateTime?
@@ -218,7 +223,7 @@ model CardAsset {
 model DailyStat {
   date       DateTime @id @db.Date
   messages   Int      @default(0)
-  xpAwarded  Int      @default(0)
+  xpAwarded  Decimal  @default(0) @db.Decimal(14, 2)
   scrapSpent Int      @default(0)
 }
 

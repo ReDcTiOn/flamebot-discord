@@ -23,6 +23,17 @@ export function intOrNull(fd: FormData, name: string): number | null {
   return str(fd, name).trim() === "" ? null : int(fd, name);
 }
 
+// Дробное число с точностью до сотых. Понимает и «0,01», и «0.01».
+export function dec(fd: FormData, name: string): number {
+  const raw = str(fd, name).trim().replace(/\s/g, "").replace(",", ".");
+  if (!/^-?\d+(\.\d{1,2})?$/.test(raw)) throw new ActionError("Числа — не больше двух знаков после запятой, например 0.01");
+  return Math.round(Number(raw) * 100) / 100;
+}
+
+export function decOrNull(fd: FormData, name: string): number | null {
+  return str(fd, name).trim() === "" ? null : dec(fd, name);
+}
+
 export function bool(fd: FormData, name: string): boolean {
   return fd.get(name) === "on";
 }
