@@ -4,8 +4,8 @@
 
 | Копия | Папка | Ветка | Панель | Discord |
 |---|---|---|---|---|
-| Рабочая (prod) | `/opt/flamebot/prod` | `main` | `https://panel.example.com` | твой сервер и твой бот |
-| Тестовая (staging) | `/opt/flamebot/staging` | `dev` | `https://staging.example.com` | тестовый сервер и тестовый бот |
+| Рабочая (prod) | `/opt/flamebot/prod` | `main` | `https://bots.flamerust.gg` | твой сервер и твой бот |
+| Тестовая (staging) | `/opt/flamebot/staging` | `dev` | `https://bots-staging.flamerust.gg` | тестовый сервер и тестовый бот |
 
 Обновление выглядит так: правишь код у себя, отправляешь в `dev`, тестовая копия обновляется сама,
 проверяешь её. Всё хорошо — переносишь `dev` в `main`, рабочая копия обновляется сама.
@@ -17,7 +17,7 @@
 
 - VPS с Ubuntu 22.04 или 24.04. Памяти 2 ГБ на одну копию, 4 ГБ на рабочую и тестовую вместе.
   На 1 ГБ тоже заработает: скрипт добавит swap, но сборка будет идти долго.
-- Домен (или поддомен) с A-записью на IP сервера, чтобы у панели был HTTPS.
+- Домен в Cloudflare: панель будет на `bots.flamerust.gg` (раздел 3).
   Без домена панель можно открыть через SSH-туннель, см. [в конце](#без-домена).
 
 ## 1. Подготовка сервера (один раз)
@@ -53,7 +53,7 @@ nano .env
 
 - `DISCORD_TOKEN`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `GUILD_ID` — как у тебя на ПК.
 - `ONLINE_SECRET_KEY` — **тот же, что на ПК**, если переносишь базу: иначе бот онлайна не прочитает сохранённые пароли RCON.
-- `PANEL_URL=https://panel.example.com`, `TRUST_PROXY=true`.
+- `PANEL_URL=https://bots.flamerust.gg`, `TRUST_PROXY=true`.
 - `COMPOSE_PROJECT_NAME=flamebot`, `PANEL_PORT=3000`.
 - `POSTGRES_PASSWORD` и `SESSION_SECRET` — новые: `openssl rand -hex 24` и `openssl rand -hex 32`.
 
@@ -63,15 +63,64 @@ nano .env
 ./deploy/update.sh
 ```
 
-## 3. Домен и HTTPS
+## 3. Домен через Cloudflare и HTTPS
 
-1. Открой `/etc/caddy/Caddyfile` (`sudo nano /etc/caddy/Caddyfile`), замени содержимое образцом из
-   [deploy/Caddyfile.example](../deploy/Caddyfile.example) со своим доменом и выполни `sudo systemctl reload caddy`.
-   Сертификат Caddy выпустит сам.
-2. В [Discord Developer Portal](https://discord.com/developers/applications) → OAuth2 → Redirects добавь
-   `https://panel.example.com/api/auth/callback`.
+Панель будет на `https://bots.flamerust.gg`, тестовая копия — на `https://bots-staging.flamerust.gg`.
+Тестовая именно `bots-staging`, а не `staging.bots`: бесплатный сертификат Cloudflare покрывает
+только один уровень поддоменов (`*.flamerust.gg`).
 
-Открывай панель и входи через Discord.
+### 3.1. DNS-запись
+
+Cloudflare → домен `flamerust.gg` → **DNS → Records → Add record**:
+
+| Type | Name | IPv4 address | Proxy status | TTL |
+|---|---|---|---|---|
+| A | `bots` | IP твоего VPS | **DNS only** (серое облако) | Auto |
+| A | `bots-staging` | IP твоего VPS | **DNS only** (серое облако) | Auto |
+
+Вторая строка — только если делаешь тестовую копию. Серое облако — пока Caddy не получит сертификат (шаг 3.2),
+потом включим оранжевое.
+
+Через пару минут проверь с ПК: `nslookup bots.flamerust.gg` должен показать IP сервера.
+
+### 3.2. Caddy на сервере
+
+```bash
+sudo cp /opt/flamebot/prod/deploy/Caddyfile.example /etc/caddy/Caddyfile
+sudo nano /etc/caddy/Caddyfile        # удали блок bots-staging, если тестовой копии нет
+sudo systemctl reload caddy
+sudo journalctl -u caddy -f           # ждём «certificate obtained successfully», выход — Ctrl+C
+```
+
+Открой `https://bots.flamerust.gg` — должна появиться страница входа.
+
+В Caddyfile уже настроено, что панель видит настоящий IP игрока из заголовка Cloudflare
+(по нему работают ограничения на вход и журнал), а подделать этот заголовок в обход Cloudflare нельзя.
+
+### 3.3. Включаем защиту Cloudflare
+
+1. **DNS → Records**: у записей `bots` и `bots-staging` нажми Edit и переключи Proxy status на **Proxied** (оранжевое облако).
+2. **SSL/TLS → Overview**: режим **Full (strict)**.
+   Не Flexible: с ним между Cloudflare и сервером не будет шифрования, а панель уйдёт в бесконечный редирект.
+3. **SSL/TLS → Edge Certificates**: включи **Always Use HTTPS**, Minimum TLS Version — **TLS 1.2**.
+4. Выключи то, что ломает панель. Её защита (CSP) блокирует чужие скрипты, которые вставляет Cloudflare:
+   - **Speed → Optimization → Content Optimization → Rocket Loader** — выключить;
+   - **Scrape Shield → Email Address Obfuscation** — выключить.
+5. Не добавляй для этих доменов правила кеширования «Cache Everything»: панель показывает личные данные,
+   их нельзя кешировать. Обычный кеш Cloudflare страницы не трогает, его менять не нужно.
+
+Проверь ещё раз `https://bots.flamerust.gg`. Caddy продлевает сертификат сам, в том числе через Cloudflare.
+Если в `journalctl -u caddy` появятся ошибки продления, временно переключи запись в DNS only и выполни
+`sudo systemctl reload caddy`.
+
+### 3.4. Discord и `.env`
+
+1. [Discord Developer Portal](https://discord.com/developers/applications) → твоё приложение → **OAuth2 → Redirects** → добавь
+   `https://bots.flamerust.gg/api/auth/callback` и сохрани. Старый `http://localhost:3000/...` можно оставить для работы на ПК.
+2. В `/opt/flamebot/prod/.env`: `PANEL_URL=https://bots.flamerust.gg` и `TRUST_PROXY=true`, затем
+   `./deploy/update.sh --restart`.
+
+Открывай `https://bots.flamerust.gg` и входи через Discord.
 
 ## 4. Перенос данных с ПК
 
@@ -144,11 +193,11 @@ cd /opt/flamebot/prod && ./deploy/update.sh
    ```
 
    В `.env` тестовой копии: данные тестового приложения Discord и тестового сервера,
-   `COMPOSE_PROJECT_NAME=flamebot-staging`, `PANEL_PORT=3001`, `PANEL_URL=https://staging.example.com`,
+   `COMPOSE_PROJECT_NAME=flamebot-staging`, `PANEL_PORT=3001`, `PANEL_URL=https://bots-staging.flamerust.gg`,
    `TRUST_PROXY=true`, свои `POSTGRES_PASSWORD`, `SESSION_SECRET` и `ONLINE_SECRET_KEY`
    (`pnpm -F online-bot gen-key` на ПК).
-3. `./deploy/update.sh`, затем блок `staging.example.com` в Caddyfile и Redirect
-   `https://staging.example.com/api/auth/callback` у тестового приложения в Developer Portal.
+3. `./deploy/update.sh`, затем запись `bots-staging` в Cloudflare и блок `bots-staging.flamerust.gg` в Caddyfile (раздел 3) и Redirect
+   `https://bots-staging.flamerust.gg/api/auth/callback` у тестового приложения в Developer Portal.
 
 База у тестовой копии своя и пустая. Можно залить в неё копию рабочей базы через `restore.sh`,
 но тогда серверы онлайна придётся ввести заново: у тестовой копии другой `ONLINE_SECRET_KEY`.
