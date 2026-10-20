@@ -1,6 +1,7 @@
 import { Plus, Trash2 } from "lucide-react";
 import { formatNumber, getRatingSettings, messageReward, prisma, type Rank } from "@flamebot/core";
 import { ActionForm, IconSubmit, SubmitButton } from "@/components/ActionForm";
+import { EmojiPicker } from "@/components/EmojiPicker";
 import { ExpandableRow } from "@/components/ui/ExpandableRow";
 import { EmptyState, FieldRow, NumberInput, PageHead, RoleSelect, Section, Switch, Tabs, pickTab } from "@/components/Fields";
 import { ModalCancel, ModalTrigger } from "@/components/ui/Modal";
@@ -25,10 +26,10 @@ function RankFields({ roles, rank, defaults }: { roles: Roles; rank?: Rank; defa
           <span>Название</span>
           <input type="text" name="name" defaultValue={rank?.name} placeholder="Бункер" maxLength={50} required className="wide" />
         </label>
-        <label className="stack">
-          <span>Эмодзи</span>
-          <input type="text" name="emoji" defaultValue={rank?.emoji ?? ""} placeholder="☢️" maxLength={32} className="wide" />
-        </label>
+        <div className="stack">
+          <span className="field-label">Эмодзи</span>
+          <EmojiPicker name="emoji" defaultValue={rank?.emoji ?? null} label="Эмодзи ранга" />
+        </div>
       </div>
       <div className="grid grid-2">
         <label className="stack">
