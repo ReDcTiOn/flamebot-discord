@@ -1,4 +1,4 @@
-import { AttachmentBuilder, EmbedBuilder, MessageFlags, SlashCommandBuilder, escapeMarkdown } from "discord.js";
+import { AttachmentBuilder, EmbedBuilder, Locale, MessageFlags, SlashCommandBuilder, escapeMarkdown } from "discord.js";
 import { formatNumber, prisma, rankProgress } from "@flamebot/core";
 import { stripEmoji } from "@flamebot/core/card";
 import { log } from "../logger.js";
@@ -11,6 +11,7 @@ import { COLORS, type Command } from "./types.js";
 export const profileCommand: Command = {
   data: new SlashCommandBuilder()
     .setName("profile")
+    .setNameLocalizations({ [Locale.Russian]: "профиль" })
     .setDescription("Профиль игрока: ранг, скрап, репутация")
     .addUserOption((o) => o.setName("игрок").setDescription("Чей профиль показать").setRequired(false))
     .toJSON(),

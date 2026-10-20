@@ -1,6 +1,7 @@
 import { Client, Events, GatewayIntentBits, Partials, Routes, type Guild } from "discord.js";
 import { ensureRatingDefaults, isBotEnabled, prisma, reportBotState } from "@flamebot/core";
 import { commands } from "./commands/index.js";
+import { rememberCommandIds } from "./commands/mention.js";
 import { config } from "./config.js";
 import { handleInteraction } from "./interactions.js";
 import { log } from "./logger.js";
@@ -48,9 +49,10 @@ async function setupGuild(c: Client, guild: Guild) {
 
   // Регистрируем команды при каждом запуске: так они всегда совпадают с кодом.
   try {
-    await c.rest.put(Routes.applicationGuildCommands(c.application!.id, guild.id), {
+    const registered = (await c.rest.put(Routes.applicationGuildCommands(c.application!.id, guild.id), {
       body: commands.map((cmd) => cmd.data),
-    });
+    })) as { id: string; name: string }[];
+    rememberCommandIds(registered);
     log.info(`Команды зарегистрированы: ${commands.length}`);
   } catch (err) {
     log.error("Не удалось зарегистрировать команды", err);

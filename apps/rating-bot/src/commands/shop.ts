@@ -4,6 +4,7 @@ import {
   ContainerBuilder,
   ModalBuilder,
   SectionBuilder,
+  Locale,
   SlashCommandBuilder,
   TextInputBuilder,
   TextInputStyle,
@@ -341,7 +342,11 @@ function customRoleModal(item: ShopItem) {
 }
 
 export const shopCommand: Command = {
-  data: new SlashCommandBuilder().setName("shop").setDescription("Магазин: что купить за скрап").toJSON(),
+  data: new SlashCommandBuilder()
+    .setName("shop")
+    .setNameLocalizations({ [Locale.Russian]: "магазин" })
+    .setDescription("Магазин: что купить за скрап")
+    .toJSON(),
   componentPrefix: "shop",
 
   async execute(interaction) {

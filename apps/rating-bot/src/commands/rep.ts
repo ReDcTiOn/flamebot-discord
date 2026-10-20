@@ -1,4 +1,5 @@
-import { EmbedBuilder, MessageFlags, SlashCommandBuilder, escapeMarkdown } from "discord.js";
+import { EmbedBuilder, Locale, MessageFlags, SlashCommandBuilder, escapeMarkdown } from "discord.js";
+import { commandMention } from "./mention.js";
 import { formatNumber, prisma } from "@flamebot/core";
 import { getState } from "../state.js";
 import { event } from "../services/events.js";
@@ -12,6 +13,7 @@ const DAY = 24 * HOUR;
 export const repCommand: Command = {
   data: new SlashCommandBuilder()
     .setName("rep")
+    .setNameLocalizations({ [Locale.Russian]: "реп" })
     .setDescription("Дать +1 к репутации игроку")
     .addUserOption((o) => o.setName("игрок").setDescription("Кому дать репутацию").setRequired(true))
     .toJSON(),
@@ -55,7 +57,7 @@ export const repCommand: Command = {
       });
       if (last) {
         const wait = last.createdAt.getTime() + settings.repCooldownHours * HOUR - now;
-        return { ok: false as const, message: `Следующий /rep можно дать через ${formatDuration(wait)}.` };
+        return { ok: false as const, message: `Следующий ${commandMention("rep")} можно дать через ${formatDuration(wait)}.` };
       }
 
       if (settings.repSameTargetDays > 0) {
@@ -99,7 +101,8 @@ export const repCommand: Command = {
       .setDescription(
         `**${escapeMarkdown(interaction.member.displayName)}** дал репутацию **${escapeMarkdown(targetMember.displayName)}** · теперь ${formatNumber(result.total)} 👍`,
       )
-      .setFooter({ text: `Следующий /rep через ${settings.repCooldownHours} ч` });
+      // В подвале упоминания команд не работают, поэтому без названия команды.
+      .setFooter({ text: `Репутацию снова можно дать через ${settings.repCooldownHours} ч` });
 
     await interaction.reply({ embeds: [embed], allowedMentions: { parse: [] } });
   },

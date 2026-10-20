@@ -2,6 +2,7 @@ import {
   ButtonStyle,
   ContainerBuilder,
   SectionBuilder,
+  Locale,
   SlashCommandBuilder,
   ThumbnailBuilder,
   escapeMarkdown,
@@ -91,6 +92,7 @@ export async function buildTop(category: Category, viewerId: string, guildName: 
 export const topCommand: Command = {
   data: new SlashCommandBuilder()
     .setName("top")
+    .setNameLocalizations({ [Locale.Russian]: "топ" })
     .setDescription("Таблица лидеров сервера")
     .addStringOption((o) =>
       o
