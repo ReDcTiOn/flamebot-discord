@@ -4,6 +4,7 @@ import { log } from "../logger.js";
 import { getState } from "../state.js";
 import { applyRank } from "./ranks.js";
 import { expireOldRequests } from "./customRoles.js";
+import { event } from "./events.js";
 import { revokeRole } from "./roles.js";
 
 function isUnknownMember(err: unknown): boolean {
@@ -30,6 +31,10 @@ export async function expirePurchases(guild: Guild): Promise<void> {
         }
       }
       await prisma.purchase.update({ where: { id: p.id }, data: { active: false } });
+      event("purchase.expired", `Закончился срок «${p.item.name}»${p.customName ? ` («${p.customName}»)` : ""}, роль снята`, {
+        memberId: p.memberId,
+        details: { purchaseId: p.id, item: p.item.name },
+      });
     } catch (err) {
       log.warn(`Не удалось завершить покупку #${p.id}`, err);
     }
@@ -68,8 +73,16 @@ export async function processRoleSyncQueue(guild: Guild): Promise<void> {
   }
 }
 
+// Обычные события храним 90 дней, предупреждения и ошибки — 180.
+export async function cleanupEvents(): Promise<void> {
+  const day = 86_400_000;
+  await prisma.botEvent.deleteMany({ where: { level: "INFO", createdAt: { lt: new Date(Date.now() - 90 * day) } } });
+  await prisma.botEvent.deleteMany({ where: { createdAt: { lt: new Date(Date.now() - 180 * day) } } });
+}
+
 export function startJobs(guild: Guild, every: (fn: () => Promise<void>, ms: number) => void): void {
   every(() => expirePurchases(guild), 5 * 60_000);
   every(() => processRoleSyncQueue(guild), 30_000);
   every(() => expireOldRequests(guild), 30 * 60_000);
+  every(cleanupEvents, 24 * 3_600_000);
 }

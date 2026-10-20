@@ -423,3 +423,26 @@ label.btn { cursor: pointer; }
 @media (max-width: 700px) { .type-picker { grid-template-columns: 1fr; } }
 .setting-icon.rank-emoji { font-size: 18px; color: var(--text); }
 .json-view { margin: 0; padding: 12px 14px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); font-family: var(--mono); font-size: 12.5px; line-height: 1.55; color: var(--text-secondary); white-space: pre-wrap; word-break: break-word; max-height: 60vh; overflow: auto; }
+
+/* История событий */
+.chip.warn { background: var(--warning-bg); color: var(--warning); }
+.link { color: #7fb0ff; }
+.link:hover { text-decoration: underline; }
+.events-table tr.event-error td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
+.events-table tr.event-warn td:first-child { box-shadow: inset 3px 0 0 var(--warning); }
+
+/* Карточка игрока */
+.back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 13px; margin-bottom: 14px; }
+.back-link:hover { color: var(--text); }
+.member-head { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+.member-avatar { width: 64px; height: 64px; border-radius: 50%; background: var(--surface-2); flex-shrink: 0; }
+.mini-progress { height: 4px; background: var(--surface-3); border-radius: 2px; overflow: hidden; margin-top: 8px; }
+.mini-progress > div { height: 100%; background: var(--accent); }
+.facts { display: flex; gap: 20px; flex-wrap: wrap; font-size: 13px; color: var(--text-secondary); margin: 6px 0 24px; }
+.facts b { color: var(--text); font-weight: 500; }
+.badge-form { display: inline; }
+.badge-chip { padding-right: 4px; font-size: 13px; }
+.chip-x { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 15px; line-height: 1; padding: 0 4px; border-radius: 4px; }
+.chip-x:hover { color: var(--danger); background: var(--danger-bg); }
+a.member-link { color: var(--text); }
+a.member-link:hover { color: #7fb0ff; }

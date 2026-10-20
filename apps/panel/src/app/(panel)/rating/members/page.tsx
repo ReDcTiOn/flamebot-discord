@@ -1,11 +1,8 @@
 import Link from "next/link";
 import { formatNumber, prisma, SNOWFLAKE } from "@flamebot/core";
-import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { EmptyState, PageHead } from "@/components/Fields";
-import { ModalCancel, ModalTrigger } from "@/components/ui/Modal";
 import { requirePage } from "@/lib/auth";
 import { avatarUrl } from "@/lib/discord";
-import { adjustMember, resetMember } from "../actions";
 
 export const metadata = { title: "Игроки" };
 
@@ -53,7 +50,7 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
 
   return (
     <>
-      <PageHead title="Игроки" hint="Поиск игрока и ручная правка опыта, скрапа и репутации. Каждое изменение пишется в журнал с причиной." />
+      <PageHead title="Игроки" hint="Нажми на игрока, чтобы открыть его карточку: покупки, бейджи, репутация, история и ручная правка баланса." />
 
       <form method="get" className="toolbar-row">
         <input type="search" name="q" defaultValue={q} placeholder="Ник или Discord ID" maxLength={64} aria-label="Поиск игрока" />
@@ -93,7 +90,10 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
                       <img className="avatar" src={avatarUrl(m.id, m.avatarHash)} alt="" width={30} height={30} />
                       <div style={{ minWidth: 0 }}>
                         <div>
-                          {m.displayName} {!m.inGuild && <span className="chip">Вышел</span>}
+                          <Link href={`/rating/members/${m.id}`} className="member-link">
+                            {m.displayName}
+                          </Link>{" "}
+                          {!m.inGuild && <span className="chip">Вышел</span>}
                         </div>
                         <div className="muted" style={{ fontSize: 12 }}>@{m.username}</div>
                       </div>
@@ -104,53 +104,9 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
                   <td className="num">{formatNumber(m.scrap)}</td>
                   <td className="num">{formatNumber(m.rep)}</td>
                   <td style={{ width: 1 }}>
-                    <ModalTrigger label="Изменить" buttonClass="btn small" title={m.displayName} description={`@${m.username} · ${m.id}`}>
-                      <div className="stat-row">
-                        <div className="metric"><div className="metric-label">Опыт</div><div className="metric-value">{formatNumber(m.xp)}</div></div>
-                        <div className="metric"><div className="metric-label">Скрап</div><div className="metric-value">{formatNumber(m.scrap)}</div></div>
-                        <div className="metric"><div className="metric-label">Репутация</div><div className="metric-value">{formatNumber(m.rep)}</div></div>
-                      </div>
-
-                      <ActionForm action={adjustMember}>
-                        <input type="hidden" name="memberId" value={m.id} />
-                        <div className="grid grid-2">
-                          <label className="stack">
-                            <span>Что меняем</span>
-                            <select name="field" defaultValue="scrap" className="wide">
-                              <option value="scrap">Скрап</option>
-                              <option value="xp">Опыт</option>
-                              <option value="rep">Репутация</option>
-                            </select>
-                          </label>
-                          <label className="stack">
-                            <span>Изменение</span>
-                            <input type="number" name="delta" placeholder="250 или -100" required className="wide" />
-                          </label>
-                        </div>
-                        <label className="stack" style={{ marginTop: 12 }}>
-                          <span>Причина (попадёт в журнал)</span>
-                          <input type="text" name="reason" required minLength={3} maxLength={200} className="wide" placeholder="Победа в ивенте" />
-                        </label>
-                        <div className="modal-actions">
-                          <ModalCancel />
-                          <SubmitButton>Применить</SubmitButton>
-                        </div>
-                      </ActionForm>
-
-                      <div className="danger-zone">
-                        <h3>Обнулить игрока</h3>
-                        <p className="secondary" style={{ fontSize: 13, marginBottom: 10 }}>
-                          Опыт, скрап, репутация и бейджи станут нулевыми, роли рангов снимутся. Отменить нельзя.
-                        </p>
-                        <ActionForm action={resetMember} confirm={`Обнулить ${m.displayName}?`} confirmLabel="Обнулить" danger>
-                          <input type="hidden" name="memberId" value={m.id} />
-                          <div style={{ display: "flex", gap: 8 }}>
-                            <input type="text" name="reason" required minLength={3} maxLength={200} className="wide" placeholder="Причина: накрутка опыта" aria-label="Причина обнуления" />
-                            <SubmitButton variant="danger">Обнулить</SubmitButton>
-                          </div>
-                        </ActionForm>
-                      </div>
-                    </ModalTrigger>
+                    <Link href={`/rating/members/${m.id}`} className="btn small">
+                      Открыть
+                    </Link>
                   </td>
                 </tr>
               ))}

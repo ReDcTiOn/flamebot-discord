@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { formatNumber, prisma, startOfUtcDay } from "@flamebot/core";
 import { requirePage } from "@/lib/auth";
 import { PageHead } from "@/components/Fields";
@@ -11,13 +12,15 @@ export default async function RatingOverview() {
   const today = startOfUtcDay();
   const from = new Date(today.getTime() - (DAYS - 1) * 86_400_000);
 
-  const [members, activeToday, scrap, stats, purchases, ranks] = await Promise.all([
+  const [members, activeToday, scrap, stats, purchases, ranks, problems, pendingRequests] = await Promise.all([
     prisma.member.count({ where: { inGuild: true } }),
     prisma.member.count({ where: { lastXpAt: { gte: today } } }),
     prisma.member.aggregate({ _sum: { scrap: true } }),
     prisma.dailyStat.findMany({ where: { date: { gte: from } }, orderBy: { date: "asc" } }),
     prisma.purchase.findMany({ orderBy: { createdAt: "desc" }, take: 8, include: { item: true, member: true } }),
     prisma.rank.findMany({ orderBy: { minXp: "asc" }, include: { _count: { select: { members: true } } } }),
+    prisma.botEvent.count({ where: { botKey: "rating", level: { in: ["WARN", "ERROR"] }, createdAt: { gte: new Date(Date.now() - 86_400_000) } } }),
+    prisma.customRoleRequest.count({ where: { status: "PENDING" } }),
   ]);
 
   const byDay = new Map(stats.map((s) => [s.date.toISOString().slice(0, 10), s]));
@@ -33,6 +36,23 @@ export default async function RatingOverview() {
   return (
     <>
       <PageHead title="Scrap Rank" hint="Сводка по активности и экономике сервера." />
+
+      {problems > 0 && (
+        <p className="notice warn">
+          За последние сутки {formatNumber(problems)} предупреждений или ошибок бота.{" "}
+          <Link href="/rating/events?level=problems" className="link">
+            Открыть историю
+          </Link>
+        </p>
+      )}
+      {pendingRequests > 0 && (
+        <p className="notice">
+          Заявок на личные роли ждёт решения: {formatNumber(pendingRequests)}.{" "}
+          <Link href="/rating/shop?tab=requests" className="link">
+            Посмотреть
+          </Link>
+        </p>
+      )}
 
       <div className="grid grid-4" style={{ marginBottom: 16 }}>
         <div className="metric"><div className="metric-label">Участников в рейтинге</div><div className="metric-value">{formatNumber(members)}</div></div>

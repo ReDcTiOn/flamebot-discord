@@ -20,9 +20,12 @@ export type {
   ProfileCard,
   CustomRoleRequest,
   CustomRoleRequestStatus,
+  BotEvent,
+  EventLevel,
   CardAsset,
   AuditLog,
   AdminSession,
   PrismaClient,
 } from "@prisma/client";
 export * from "./cardAssets.js";
+export * from "./events.js";

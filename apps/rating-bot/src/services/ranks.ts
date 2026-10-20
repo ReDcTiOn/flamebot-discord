@@ -1,6 +1,7 @@
 import { escapeMarkdown, type GuildMember, type GuildTextBasedChannel } from "discord.js";
 import { formatNumber, prisma, rankForXp, renderTemplate, type Rank, type RatingSettings } from "@flamebot/core";
 import { log } from "../logger.js";
+import { event } from "./events.js";
 import { grantRole, revokeRole } from "./roles.js";
 
 // Приводит роли участника к его рангу и выдаёт награды за новые ранги.
@@ -31,6 +32,12 @@ export async function applyRank(
   }
 
   await syncRankRoles(member, target, settings, ranks);
+  if (promoted && target) {
+    event("rank.up", `${member.displayName} получил ранг «${target.name}»${reward ? `, награда ${reward} скрапа` : ""}`, {
+      memberId: member.id,
+      details: { rank: target.name, reward, xp: memberRow.xp },
+    });
+  }
   return { promotedTo: promoted ? target : null, reward };
 }
 

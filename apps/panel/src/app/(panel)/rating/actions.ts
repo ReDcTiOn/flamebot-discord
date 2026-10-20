@@ -218,8 +218,8 @@ export async function adjustMember(_prev: ActionResult, fd: FormData): Promise<A
       });
     });
 
-    await audit(user, MODULE, "member.adjust", `${member.displayName} (${member.id})`, data);
-    revalidatePath("/rating/members");
+    await audit(user, MODULE, "member.adjust", `${member.displayName} (${member.id})`, { ...data, memberId: member.id });
+    revalidatePath("/rating/members", "layout");
     const label = { xp: "Опыт", scrap: "Скрап", rep: "Репутация" }[data.field];
     return `${label} игрока ${member.displayName}: теперь ${member[data.field].toLocaleString("ru-RU")}.`;
   });
@@ -242,8 +242,9 @@ export async function resetMember(_prev: ActionResult, fd: FormData): Promise<Ac
     await audit(user, MODULE, "member.reset", `${before.displayName} (${before.id})`, {
       reason,
       before: { xp: before.xp, scrap: before.scrap, rep: before.rep },
+      memberId,
     });
-    revalidatePath("/rating/members");
+    revalidatePath("/rating/members", "layout");
     return `Игрок ${before.displayName} обнулён.`;
   });
 }
@@ -323,5 +324,54 @@ export async function saveCustomRoleSettings(_prev: ActionResult, fd: FormData):
     return data.customRoleApproval
       ? "Проверка включена: личные роли будут приходить заявками в выбранный канал."
       : "Проверка выключена: личные роли выдаются сразу после покупки.";
+  });
+}
+
+// ---------- Карточка игрока: бейджи и покупки ----------
+
+export async function giveBadge(_prev: ActionResult, fd: FormData): Promise<ActionResult> {
+  return runAction("any", async (user) => {
+    const memberId = str(fd, "memberId");
+    const label = str(fd, "label").trim();
+    if (label.length < 1 || label.length > 40) throw new ActionError("Текст бейджа — от 1 до 40 символов");
+    const member = await prisma.member.findUnique({ where: { id: memberId } });
+    if (!member) throw new ActionError("Игрок не найден");
+    await prisma.memberBadge.create({ data: { memberId, label } });
+    await audit(user, MODULE, "member.badge.add", `${member.displayName} (${member.id})`, { label, memberId });
+    revalidatePath("/rating/members", "layout");
+    return `Бейдж «${label}» выдан игроку ${member.displayName}.`;
+  });
+}
+
+export async function removeBadge(_prev: ActionResult, fd: FormData): Promise<ActionResult> {
+  return runAction("any", async (user) => {
+    const id = idParam(fd);
+    const badge = await prisma.memberBadge.findUnique({ where: { id }, include: { member: true } });
+    if (!badge) throw new ActionError("Бейдж уже снят");
+    await prisma.memberBadge.delete({ where: { id } });
+    await audit(user, MODULE, "member.badge.remove", `${badge.member.displayName} (${badge.memberId})`, { label: badge.label, memberId: badge.memberId });
+    revalidatePath("/rating/members", "layout");
+    return `Бейдж «${badge.label}» снят.`;
+  });
+}
+
+// Досрочно завершает покупку роли. Саму роль снимает бот при ближайшей проверке сроков.
+export async function endPurchase(_prev: ActionResult, fd: FormData): Promise<ActionResult> {
+  return runAction("any", async (user) => {
+    const id = idParam(fd);
+    const reason = str(fd, "reason").trim();
+    if (reason.length < 3 || reason.length > 200) throw new ActionError("Укажи причину (от 3 до 200 символов)");
+    const purchase = await prisma.purchase.findUnique({ where: { id }, include: { item: true, member: true } });
+    if (!purchase || !purchase.active) throw new ActionError("Покупка уже завершена");
+    await prisma.purchase.update({ where: { id }, data: { expiresAt: new Date() } });
+    await audit(user, MODULE, "purchase.end", `${purchase.member.displayName} (${purchase.memberId})`, {
+      purchaseId: id,
+      item: purchase.item.name,
+      customName: purchase.customName,
+      reason,
+      memberId: purchase.memberId,
+    });
+    revalidatePath("/rating/members", "layout");
+    return "Покупка завершена. Бот снимет роль в течение 5 минут.";
   });
 }

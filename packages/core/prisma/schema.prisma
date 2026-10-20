@@ -261,6 +261,29 @@ model BotStatus {
   heartbeatAt DateTime
 }
 
+enum EventLevel {
+  INFO
+  WARN
+  ERROR
+}
+
+// История событий ботов: покупки, ранги, заявки, сбои. Пишут боты, панель показывает.
+model BotEvent {
+  id        Int        @id @default(autoincrement())
+  botKey    String
+  level     EventLevel @default(INFO)
+  type      String
+  memberId  String?
+  message   String
+  details   Json?
+  createdAt DateTime   @default(now())
+
+  @@index([createdAt(sort: Desc)])
+  @@index([botKey, level, createdAt(sort: Desc)])
+  @@index([memberId, createdAt(sort: Desc)])
+  @@index([type])
+}
+
 model AdminSession {
   id             String   @id // sha256 от токена из cookie; сам токен в базе не хранится
   userId         String

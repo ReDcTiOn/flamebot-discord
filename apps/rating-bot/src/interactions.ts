@@ -1,10 +1,11 @@
-import { MessageFlags, type Interaction, type RepliableInteraction } from "discord.js";
+import type { Interaction, RepliableInteraction } from "discord.js";
 import { config } from "./config.js";
 import { commands } from "./commands/index.js";
 import type { Command } from "./commands/types.js";
 import { customRoleHandler } from "./services/customRoles.js";
 import { log } from "./logger.js";
 import { getState } from "./state.js";
+import { UI, V2, V2_EPHEMERAL, notice } from "./ui.js";
 import { RateLimiter } from "./util.js";
 
 const byName = new Map(commands.map((c) => [c.data.name, c]));
@@ -18,10 +19,12 @@ const byPrefix = new Map<string, ComponentHandler>([
 // Не больше 5 действий за 10 секунд от одного человека.
 const limiter = new RateLimiter(5, 10_000);
 
-async function safeReply(interaction: RepliableInteraction, content: string) {
+async function safeReply(interaction: RepliableInteraction, message: string) {
+  // Ответ в новом формате сообщений подходит и для обычных, и для Components V2 сообщений.
+  const components = [notice(UI.danger, "Не получилось", message)];
   try {
-    if (interaction.deferred || interaction.replied) await interaction.editReply({ content, embeds: [], components: [] });
-    else await interaction.reply({ content, flags: MessageFlags.Ephemeral });
+    if (interaction.deferred || interaction.replied) await interaction.editReply({ components, flags: V2 });
+    else await interaction.reply({ components, flags: V2_EPHEMERAL });
   } catch {
     // Взаимодействие могло истечь, тут уже ничего не сделать.
   }

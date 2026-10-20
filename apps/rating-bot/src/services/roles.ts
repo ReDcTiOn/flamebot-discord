@@ -1,6 +1,7 @@
 import type { Guild, GuildMember, Role } from "discord.js";
 import { checkRoleSafeToGrant, type RoleSafety } from "@flamebot/core";
 import { log } from "../logger.js";
+import { event } from "./events.js";
 
 // Проверка по живой роли с сервера, а не по снимку в базе.
 export function checkLiveRole(guild: Guild, roleId: string | null | undefined): RoleSafety & { role?: Role } {
@@ -20,7 +21,12 @@ export function checkLiveRole(guild: Guild, roleId: string | null | undefined): 
 export async function grantRole(member: GuildMember, roleId: string, reason: string): Promise<RoleSafety> {
   const check = checkLiveRole(member.guild, roleId);
   if (!check.ok) {
-    log.warn(`Отказ в выдаче роли ${roleId} пользователю ${member.id}: ${check.reason}`);
+    console.warn(`Отказ в выдаче роли ${roleId} пользователю ${member.id}: ${check.reason}`);
+    event("role.denied", `Бот не выдал роль ${roleId} игроку ${member.displayName}: ${check.reason}`, {
+      level: "WARN",
+      memberId: member.id,
+      details: { roleId, reason: check.reason },
+    });
     return check;
   }
   if (!member.roles.cache.has(roleId)) await member.roles.add(roleId, reason);

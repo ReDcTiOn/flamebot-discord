@@ -21,8 +21,9 @@ import {
   type ModalSubmitInteraction,
   type User,
 } from "discord.js";
-import { formatNumber, getPanelSettings, prisma, type CustomRoleRequest, type Purchase, type ShopItem } from "@flamebot/core";
+import { formatNumber, getPanelSettings, prisma, type CustomRoleRequest, type Prisma, type Purchase, type ShopItem } from "@flamebot/core";
 import { log } from "../logger.js";
+import { event } from "./events.js";
 import { getState } from "../state.js";
 import { SCRAP, UI, V2, V2_EPHEMERAL, avatarUrl, button, buttonRow, divider, notice, text } from "../ui.js";
 import { withLock } from "../util.js";
@@ -40,7 +41,7 @@ const hex = (color: number | null) => (color === null ? "без цвета" : `#
 export async function createCustomRole(guild: Guild, member: GuildMember, name: string, color: number | null, purchaseId: number): Promise<string> {
   const role = await guild.roles.create({
     name,
-    color: color ?? 0,
+    colors: { primaryColor: color ?? 0 },
     permissions: [],
     mentionable: false,
     hoist: false,
@@ -187,7 +188,18 @@ async function notifyPlayer(guild: Guild, req: RequestWithItem) {
   }
 }
 
+const DECISION: Record<string, { type: string; text: string }> = {
+  "customrole.approve": { type: "customrole.approved", text: "одобрена" },
+  "customrole.reject": { type: "customrole.rejected", text: "отклонена, скрап возвращён" },
+  "customrole.expire": { type: "customrole.expired", text: "закрыта без решения, скрап возвращён" },
+};
+
 async function audit(actor: { id: string; name: string }, action: string, req: CustomRoleRequest, details: Record<string, unknown> = {}) {
+  const d = DECISION[action];
+  event(d?.type ?? action, `Заявка #${req.id} на роль «${req.name}» ${d?.text ?? action} (${actor.name})`, {
+    memberId: req.memberId,
+    details: { requestId: req.id, by: actor.name, ...details } as Prisma.InputJsonValue,
+  });
   await prisma.auditLog
     .create({ data: { module: "rating", actorId: actor.id, actorName: actor.name, action, target: `#${req.id} «${req.name}»`, details: { memberId: req.memberId, ...details } } })
     .catch(() => undefined);
@@ -268,10 +280,14 @@ export const customRoleHandler = {
         const problem = await approve(interaction.guild, id, actor);
         await interaction.editReply({
           components: [problem ? notice(UI.danger, "Не получилось", problem) : notice(UI.success, "Одобрено", "Роль создана и выдана игроку.")],
+          flags: V2,
         });
       } catch (err) {
         log.error(`Ошибка одобрения заявки #${id}`, err);
-        await interaction.editReply({ components: [notice(UI.danger, "Не получилось", "Discord не дал создать роль. Проверь, что роль бота выше личных ролей, и попробуй ещё раз.")] });
+        await interaction.editReply({
+          components: [notice(UI.danger, "Не получилось", "Discord не дал создать роль. Проверь, что роль бота выше личных ролей, и попробуй ещё раз.")],
+          flags: V2,
+        });
       }
       return;
     }
@@ -305,6 +321,7 @@ export const customRoleHandler = {
     const done = await reject(interaction.guild, Number(raw), { id: interaction.user.id, name: interaction.member.displayName }, reason);
     await interaction.editReply({
       components: [done ? notice(UI.success, "Отклонено", "Скрап вернулся игроку, ему пришло уведомление.") : notice(UI.danger, "Не получилось", "Эту заявку уже рассмотрели.")],
+      flags: V2,
     });
   },
 };

@@ -77,6 +77,10 @@ export const modules: PanelModule[] = [
           { href: "/rating/messages", label: "Сообщения", icon: "message" },
         ],
       },
+      {
+        title: "Журнал",
+        items: [{ href: "/rating/events", label: "История", icon: "list" }],
+      },
     ],
   },
 ];

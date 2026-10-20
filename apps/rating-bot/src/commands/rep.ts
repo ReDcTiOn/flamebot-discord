@@ -1,6 +1,7 @@
 import { EmbedBuilder, MessageFlags, SlashCommandBuilder, escapeMarkdown } from "discord.js";
 import { formatNumber, prisma } from "@flamebot/core";
 import { getState } from "../state.js";
+import { event } from "../services/events.js";
 import { ensureMember } from "../services/members.js";
 import { formatDuration, withLock } from "../util.js";
 import { COLORS, type Command } from "./types.js";
@@ -81,6 +82,10 @@ export const repCommand: Command = {
         prisma.repTransaction.create({ data: { giverId: giver.id, receiverId: target.id } }),
         prisma.member.update({ where: { id: target.id }, data: { rep: { increment: 1 } } }),
       ]);
+      event("rep.give", `${interaction.member.displayName} дал репутацию ${targetMember.displayName} (теперь ${receiver.rep})`, {
+        memberId: target.id,
+        details: { giverId: giver.id, total: receiver.rep },
+      });
       return { ok: true as const, total: receiver.rep };
     });
 

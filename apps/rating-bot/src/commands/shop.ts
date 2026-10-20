@@ -14,6 +14,7 @@ import {
 } from "discord.js";
 import { formatNumber, prisma, startOfUtcDay, type ShopItem } from "@flamebot/core";
 import { log } from "../logger.js";
+import { event } from "../services/events.js";
 import { ensureMember } from "../services/members.js";
 import { approvalChannelReady, createCustomRole, hasPendingRequest, postRequest, refundPurchase } from "../services/customRoles.js";
 import { checkLiveRole, grantRole } from "../services/roles.js";
@@ -159,6 +160,10 @@ async function purchase(
         await refundPurchase({ ...record, item });
         throw new PurchaseError("Не получилось отправить заявку администрации. Скрап вернули, попробуй позже.");
       }
+      event("customrole.request", `${member.displayName} подал заявку на личную роль «${customRole!.name}» (#${request.id})`, {
+        memberId: member.id,
+        details: { requestId: request.id, purchaseId: record.id, price: item.price },
+      });
       const balance = (await prisma.member.findUnique({ where: { id: member.id }, select: { scrap: true } }))?.scrap ?? 0;
       return { item, expiresAt: null, balance, pending: true, roleName: customRole!.name };
     }
@@ -175,7 +180,12 @@ async function purchase(
       }
     } catch (err) {
       // Не смогли выдать товар: возвращаем скрап и остаток.
-      log.warn(`Покупка #${record.id} не выдана, возврат`, err);
+      console.warn(`Покупка #${record.id} не выдана, возврат`, err);
+      event("shop.refund", `Покупка «${item.name}» у ${member.displayName} не выдана, ${item.price} скрапа возвращено`, {
+        level: "WARN",
+        memberId: member.id,
+        details: { purchaseId: record.id, item: item.name, price: item.price, error: err instanceof Error ? err.message : String(err) },
+      });
       await prisma.$transaction([
         prisma.member.update({ where: { id: member.id }, data: { scrap: { increment: item.price } } }),
         prisma.purchase.update({ where: { id: record.id }, data: { active: false } }),
@@ -191,6 +201,10 @@ async function purchase(
       );
     }
 
+    event("shop.purchase", `${member.displayName} купил «${item.name}» за ${item.price} скрапа`, {
+      memberId: member.id,
+      details: { purchaseId: record.id, item: item.name, price: item.price, expiresAt: expiresAt?.toISOString() ?? null },
+    });
     const balance = (await prisma.member.findUnique({ where: { id: member.id }, select: { scrap: true } }))?.scrap ?? 0;
     return { item, expiresAt, balance, pending: false, roleName: customRole?.name ?? null };
   });

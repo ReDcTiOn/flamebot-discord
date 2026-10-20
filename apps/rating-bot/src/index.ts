@@ -4,6 +4,7 @@ import { commands } from "./commands/index.js";
 import { config } from "./config.js";
 import { handleInteraction } from "./interactions.js";
 import { log } from "./logger.js";
+import { event } from "./services/events.js";
 import { heartbeat, scheduleSnapshot, syncGuildSnapshot } from "./services/guildSync.js";
 import { startJobs } from "./services/jobs.js";
 import { handleMessageXp } from "./services/xp.js";
@@ -62,6 +63,7 @@ async function setupGuild(guild: Guild) {
   await syncGuildSnapshot(guild);
   await heartbeat(guild);
   log.info(`Работаю на сервере «${guild.name}»`);
+  event("bot.start", `Бот запущен на сервере «${guild.name}»`, { details: { members: guild.memberCount } });
 
   every(() => heartbeat(guild), 60_000);
   every(() => syncGuildSnapshot(guild), 15 * 60_000);
