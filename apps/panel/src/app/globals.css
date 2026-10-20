@@ -463,3 +463,10 @@ a.member-link:hover { color: #7fb0ff; }
 .server-players b { font-size: 26px; color: var(--text); font-weight: 600; margin-right: 6px; letter-spacing: -0.02em; }
 .server-meta { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--text-muted); flex-wrap: wrap; }
 .server-error { font-size: 12.5px; color: var(--danger); background: var(--danger-bg); border-radius: 6px; padding: 6px 8px; }
+
+/* Индикатор живого обновления */
+.live-chip { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-secondary); padding: 5px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--tile); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.6); animation: live-pulse 2s ease-out infinite; }
+.live-chip.paused .live-dot { background: var(--text-muted); animation: none; }
+@keyframes live-pulse { 0% { box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.55); } 70% { box-shadow: 0 0 0 7px rgba(63, 185, 80, 0); } 100% { box-shadow: 0 0 0 0 rgba(63, 185, 80, 0); } }
+@media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { formatNumber, prisma, startOfUtcDay } from "@flamebot/core";
 import { requirePage } from "@/lib/auth";
+import { AutoRefresh } from "@/components/AutoRefresh";
 import { PageHead } from "@/components/Fields";
 
 export const metadata = { title: "Scrap Rank" };
@@ -35,7 +36,9 @@ export default async function RatingOverview() {
 
   return (
     <>
-      <PageHead title="Scrap Rank" hint="Сводка по активности и экономике сервера." />
+      <PageHead title="Scrap Rank" hint="Сводка по активности и экономике сервера.">
+        <AutoRefresh seconds={10} />
+      </PageHead>
 
       {problems > 0 && (
         <p className="notice warn">

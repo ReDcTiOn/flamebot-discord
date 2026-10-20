@@ -4,7 +4,8 @@ import { event, log } from "./events.js";
 import { WebRcon, type RconMessage } from "./rcon.js";
 
 const PRESENCE_REFRESH_MS = 10 * 60_000;
-const STATUS_WRITE_MIN_MS = 15_000;
+// Изменения онлайна пишем в базу не чаще раза в 5 секунд, смена состояния — сразу.
+const STATUS_WRITE_MIN_MS = 5_000;
 
 type Presence = { status: PresenceStatusData; text: string };
 

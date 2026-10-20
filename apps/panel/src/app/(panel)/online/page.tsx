@@ -37,8 +37,9 @@ export default async function OnlineOverview() {
 
   return (
     <>
-      <AutoRefresh seconds={10} />
-      <PageHead title="Онлайн серверов" hint="Статусы игровых серверов. Страница обновляется сама каждые 10 секунд." />
+      <PageHead title="Онлайн серверов" hint="Статусы игровых серверов в реальном времени.">
+        <AutoRefresh seconds={5} />
+      </PageHead>
 
       {!botOnline && (
         <p className="notice warn">

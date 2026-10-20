@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@flamebot/core";
+import { AutoRefresh } from "@/components/AutoRefresh";
 import { PageHead } from "@/components/Fields";
 import { Icon } from "@/components/Icon";
 import { requirePage } from "@/lib/auth";
@@ -22,7 +23,9 @@ export default async function HomePage() {
       <PageHead
         title="Боты сервера"
         hint={guild ? `${guild.name} · ${guild.memberCount.toLocaleString("ru-RU")} участников` : "Ни один бот ещё не подключился к серверу"}
-      />
+      >
+        <AutoRefresh seconds={15} />
+      </PageHead>
 
       <div className="tiles">
         {modules.map((m) => {
