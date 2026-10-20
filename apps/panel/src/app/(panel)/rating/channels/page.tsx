@@ -3,6 +3,7 @@ import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { EmptyState, FieldRow, PageHead, Section } from "@/components/Fields";
 import { requirePage } from "@/lib/auth";
 import { listTextChannels } from "@/lib/guild";
+import { ChannelPicker } from "@/components/ChannelPicker";
 import { saveChannelSettings } from "../actions";
 
 export const metadata = { title: "Каналы" };
@@ -22,7 +23,7 @@ export default async function ChannelsPage() {
 
   return (
     <>
-      <PageHead title="Каналы" hint="Где бот объявляет новые ранги, где не начисляет опыт и где принимает команды." />
+      <PageHead title="Каналы" hint="Где бот начисляет опыт, где объявляет новые ранги и где принимает команды." />
 
       <ActionForm action={saveChannelSettings}>
         <Section title="Объявления">
@@ -36,14 +37,25 @@ export default async function ChannelsPage() {
           </FieldRow>
         </Section>
 
-        <Section title="Каналы без опыта" hint="Флуд, мемы, тикеты, боты. Сообщения здесь не дают опыта и скрапа.">
-          <div className="check-list">
-            {channels.map((c) => (
-              <label key={c.id} className="check-item">
-                <input type="checkbox" name="ignoredChannelIds" value={c.id} defaultChecked={s.ignoredChannelIds.includes(c.id)} />
-                # {c.name}
+        <Section title="Где начисляется опыт" hint="Опыт и скрап дают только сообщения в выбранных каналах и в их ветках.">
+          <div className="xp-channels">
+            <div className="choice-row" role="radiogroup" aria-label="Где начисляется опыт">
+              <label className="choice">
+                <input type="radio" name="xpMode" value="all" defaultChecked={s.xpChannelIds.length === 0} />
+                <span>
+                  <strong>Во всех каналах</strong>
+                  <span>Опыт за любое сообщение на сервере</span>
+                </span>
               </label>
-            ))}
+              <label className="choice">
+                <input type="radio" name="xpMode" value="selected" defaultChecked={s.xpChannelIds.length > 0} />
+                <span>
+                  <strong>Только в выбранных</strong>
+                  <span>Отметь каналы ниже</span>
+                </span>
+              </label>
+            </div>
+            <ChannelPicker name="xpChannelIds" channels={channels} defaultSelected={s.xpChannelIds} />
           </div>
         </Section>
 

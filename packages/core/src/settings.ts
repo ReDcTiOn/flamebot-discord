@@ -30,7 +30,7 @@ export const repSettingsSchema = z.object({
 
 export const channelSettingsSchema = z.object({
   announceChannelId: snowflake.nullable(),
-  ignoredChannelIds: snowflakeList,
+  xpChannelIds: snowflakeList,
   commandChannelIds: snowflakeList,
 });
 

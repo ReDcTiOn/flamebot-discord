@@ -63,12 +63,18 @@ export async function saveRepSettings(_prev: ActionResult, fd: FormData): Promis
 
 export async function saveChannelSettings(_prev: ActionResult, fd: FormData): Promise<ActionResult> {
   return runAction("any", async (user) => {
+    const mode = str(fd, "xpMode");
+    if (mode !== "all" && mode !== "selected") throw new ActionError("Выбери, где начисляется опыт");
     const data = channelSettingsSchema.parse({
       announceChannelId: strOrNull(fd, "announceChannelId"),
-      ignoredChannelIds: ids(fd, "ignoredChannelIds"),
+      // Пустой список в базе означает «во всех каналах».
+      xpChannelIds: mode === "all" ? [] : ids(fd, "xpChannelIds"),
       commandChannelIds: ids(fd, "commandChannelIds"),
     });
-    await assertChannels([data.announceChannelId, ...data.ignoredChannelIds, ...data.commandChannelIds]);
+    if (mode === "selected" && data.xpChannelIds.length === 0) {
+      throw new ActionError("Отметь хотя бы один канал, где начисляется опыт, или выбери «Во всех каналах»");
+    }
+    await assertChannels([data.announceChannelId, ...data.xpChannelIds, ...data.commandChannelIds]);
     await saveSettings(data);
     await audit(user, MODULE, "channels.update", null, data);
     revalidatePath("/rating/channels");

@@ -40,7 +40,8 @@ model RatingSettings {
   rankUpMessage     String   @default("{user} дорос до ранга «{rank}» и получает {reward} скрапа")
   removeOldRankRoles Boolean @default(true)
 
-  ignoredChannelIds String[] @default([])
+  // Каналы, где начисляется опыт. Пустой список — опыт начисляется во всех каналах.
+  xpChannelIds      String[] @default([])
   commandChannelIds String[] @default([])
 
   repCooldownHours  Int @default(24)

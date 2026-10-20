@@ -24,7 +24,9 @@ export async function handleMessageXp(message: Message): Promise<void> {
 
   const channel = message.channel;
   const parentId = channel.isThread() ? channel.parentId : null;
-  if (settings.ignoredChannelIds.includes(channel.id) || (parentId && settings.ignoredChannelIds.includes(parentId))) {
+  // Пустой список — опыт везде. Иначе только в выбранных каналах и их ветках (треды, посты форума).
+  const allowed = settings.xpChannelIds;
+  if (allowed.length > 0 && !allowed.includes(channel.id) && !(parentId && allowed.includes(parentId))) {
     return;
   }
   const content = message.content.trim();

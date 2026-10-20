@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState, useEffect, useState, type ReactNode } from "react";
-import { useFormStatus } from "react-dom";
+import { createContext, startTransition, useActionState, useContext, useEffect, useState, type ReactNode } from "react";
 import type { ActionResult } from "@/lib/auth";
 
 type Action = (prev: ActionResult, formData: FormData) => Promise<ActionResult>;
+
+const PendingContext = createContext(false);
 
 export function ActionForm({
   action,
@@ -19,7 +20,7 @@ export function ActionForm({
   confirm?: string;
   resetOnSuccess?: boolean;
 }) {
-  const [state, formAction] = useActionState(action, null);
+  const [state, formAction, pending] = useActionState(action, null);
   const [visible, setVisible] = useState<ActionResult>(null);
   const [formKey, setFormKey] = useState(0);
 
@@ -32,26 +33,33 @@ export function ActionForm({
   }, [state, resetOnSuccess]);
 
   return (
-    <form
-      key={formKey}
-      action={formAction}
-      className={className}
-      onSubmit={(e) => {
-        if (confirm && !window.confirm(confirm)) e.preventDefault();
-      }}
-    >
-      {children}
-      {visible && (
-        <p role="status" className={visible.ok ? "form-status ok" : "form-status error"}>
-          {visible.message}
-        </p>
-      )}
-    </form>
+    <PendingContext.Provider value={pending}>
+      <form
+        key={formKey}
+        className={className}
+        // Отправляем вручную, а не через action={...}: иначе React 19 после каждой отправки
+        // сбрасывает поля к исходным значениям и при ошибке введённое пропадает.
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (pending) return;
+          if (confirm && !window.confirm(confirm)) return;
+          const fd = new FormData(e.currentTarget);
+          startTransition(() => formAction(fd));
+        }}
+      >
+        {children}
+        {visible && (
+          <p role="status" className={visible.ok ? "form-status ok" : "form-status error"}>
+            {visible.message}
+          </p>
+        )}
+      </form>
+    </PendingContext.Provider>
   );
 }
 
 export function SubmitButton({ children, variant = "primary" }: { children: ReactNode; variant?: "primary" | "secondary" | "danger" }) {
-  const { pending } = useFormStatus();
+  const pending = useContext(PendingContext);
   return (
     <button type="submit" className={`btn ${variant}`} disabled={pending} aria-busy={pending}>
       {pending ? "Сохраняю…" : children}
