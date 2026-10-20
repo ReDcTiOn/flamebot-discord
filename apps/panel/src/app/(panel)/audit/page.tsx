@@ -34,6 +34,8 @@ const ACTIONS: Record<string, string> = {
   "online.server.update": "Изменил сервер",
   "online.server.delete": "Удалил сервер",
   "online.settings": "Изменил настройки онлайна",
+  "bot.start": "Запустил бота",
+  "bot.stop": "Остановил бота",
   "card.update": "Изменил карточку профиля",
   "card.toggle": "Переключил вид /profile",
   "card.upload": "Загрузил картинку для карточки",

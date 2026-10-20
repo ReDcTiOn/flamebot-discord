@@ -470,3 +470,11 @@ a.member-link:hover { color: #7fb0ff; }
 .live-chip.paused .live-dot { background: var(--text-muted); animation: none; }
 @keyframes live-pulse { 0% { box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.55); } 70% { box-shadow: 0 0 0 7px rgba(63, 185, 80, 0); } 100% { box-shadow: 0 0 0 0 rgba(63, 185, 80, 0); } }
 @media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } }
+
+/* Запуск и остановка бота */
+.bot-power { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.bot-power form { display: inline; }
+.head-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.rail-status.paused { background: var(--text-muted); }
+.rail-status.pending { background: var(--warning); }
+.rail-status.off { background: var(--danger); }

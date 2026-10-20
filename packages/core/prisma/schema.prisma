@@ -316,9 +316,22 @@ model GuildInfo {
 }
 
 // Каждый бот раз в минуту отмечается здесь под своим ключом (например, "rating").
+// state — что бот делает на самом деле: running (работает), paused (остановлен из панели)
+// или failed (включён, но не смог войти в Discord).
 model BotStatus {
   botKey      String   @id
   heartbeatAt DateTime
+  state       String   @default("running")
+}
+
+// Включён ли бот. Панель меняет флаг, бот проверяет его каждые несколько секунд:
+// выключенный бот отключается от Discord, но процесс остаётся и ждёт команды на запуск.
+model BotControl {
+  botKey        String   @id
+  enabled       Boolean  @default(true)
+  changedById   String?
+  changedByName String?
+  updatedAt     DateTime @updatedAt
 }
 
 enum EventLevel {

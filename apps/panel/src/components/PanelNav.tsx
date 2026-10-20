@@ -25,7 +25,7 @@ export function PanelNav({
 }: {
   user: { username: string; avatar: string; full: boolean };
   guildName: string | null;
-  online: Record<string, boolean>;
+  online: Record<string, "on" | "paused" | "pending" | "off">;
   logout: () => Promise<void>;
 }) {
   const pathname = usePathname();
@@ -64,7 +64,7 @@ export function PanelNav({
               aria-label={m.title}
             >
               <Icon name={m.icon} size={20} />
-              <span className={online[m.key] ? "rail-status on" : "rail-status"} aria-hidden="true" />
+              <span className={`rail-status ${online[m.key] ?? "off"}`} aria-hidden="true" />
             </Link>
           );
         })}

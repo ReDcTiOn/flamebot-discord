@@ -17,6 +17,7 @@ export type {
   GuildChannel,
   GuildInfo,
   BotStatus,
+  BotControl,
   ProfileCard,
   CustomRoleRequest,
   CustomRoleRequestStatus,
@@ -35,3 +36,4 @@ export * from "./cardAssets.js";
 export * from "./events.js";
 export * from "./secrets.js";
 export * from "./online.js";
+export * from "./control.js";

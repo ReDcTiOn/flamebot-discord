@@ -1,22 +1,18 @@
 import Link from "next/link";
 import { prisma } from "@flamebot/core";
 import { AutoRefresh } from "@/components/AutoRefresh";
+import { BotPower } from "@/components/BotPower";
 import { PageHead } from "@/components/Fields";
 import { Icon } from "@/components/Icon";
 import { requirePage } from "@/lib/auth";
+import { getBotStates } from "@/lib/botState";
 import { modules } from "@/modules";
 
 export const metadata = { title: "Главная" };
 
-const ONLINE_MS = 3 * 60_000;
-
 export default async function HomePage() {
-  await requirePage();
-  const [statuses, guild] = await Promise.all([
-    prisma.botStatus.findMany(),
-    prisma.guildInfo.findUnique({ where: { id: 1 } }),
-  ]);
-  const byKey = new Map(statuses.map((s) => [s.botKey, s]));
+  const user = await requirePage();
+  const [states, guild] = await Promise.all([getBotStates(modules.map((m) => m.key)), prisma.guildInfo.findUnique({ where: { id: 1 } })]);
 
   return (
     <>
@@ -24,32 +20,28 @@ export default async function HomePage() {
         title="Боты сервера"
         hint={guild ? `${guild.name} · ${guild.memberCount.toLocaleString("ru-RU")} участников` : "Ни один бот ещё не подключился к серверу"}
       >
-        <AutoRefresh seconds={15} />
+        <AutoRefresh seconds={5} />
       </PageHead>
 
       <div className="tiles">
-        {modules.map((m) => {
-          const status = byKey.get(m.key);
-          const online = status && Date.now() - status.heartbeatAt.getTime() < ONLINE_MS;
-          return (
-            <Link key={m.key} href={`/${m.key}`} className="setting">
-              <div className="bot-mark" style={{ background: m.color }}>
-                <Icon name={m.icon} size={20} />
-              </div>
-              <div className="setting-body">
-                <div className="setting-title">{m.title}</div>
-                <div className="setting-hint">{m.description}</div>
-              </div>
-              <div className="setting-control">
-                <span className={online ? "chip success" : "chip danger"}>
-                  <span className="dot" style={{ background: "currentColor" }} />
-                  {online ? "Онлайн" : status ? "Не отвечает" : "Не запускался"}
-                </span>
-              </div>
+        {modules.map((m) => (
+          <div key={m.key} className="setting">
+            <Link href={`/${m.key}`} className="bot-mark" style={{ background: m.color }} aria-label={m.title}>
+              <Icon name={m.icon} size={20} />
             </Link>
-          );
-        })}
+            <Link href={`/${m.key}`} className="setting-body">
+              <div className="setting-title">{m.title}</div>
+              <div className="setting-hint">{m.description}</div>
+            </Link>
+            <div className="setting-control">
+              <BotPower botKey={m.key} title={m.title} state={states[m.key]!} canControl={user.level === "full"} />
+            </div>
+          </div>
+        ))}
       </div>
+      {user.level !== "full" && (
+        <p className="muted" style={{ fontSize: 12.5, marginTop: 12 }}>Запускать и останавливать ботов могут только администраторы сервера.</p>
+      )}
     </>
   );
 }

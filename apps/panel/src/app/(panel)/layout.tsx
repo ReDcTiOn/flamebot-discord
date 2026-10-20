@@ -3,18 +3,15 @@ import { prisma } from "@flamebot/core";
 import { PanelNav } from "@/components/PanelNav";
 import { ToastProvider } from "@/components/ui/Toast";
 import { requirePage } from "@/lib/auth";
+import { getBotStates } from "@/lib/botState";
 import { avatarUrl } from "@/lib/discord";
+import { modules } from "@/modules";
 import { logout } from "./actions";
-
-const ONLINE_MS = 3 * 60_000;
 
 export default async function PanelLayout({ children }: { children: ReactNode }) {
   const user = await requirePage();
-  const [guild, statuses] = await Promise.all([
-    prisma.guildInfo.findUnique({ where: { id: 1 } }),
-    prisma.botStatus.findMany(),
-  ]);
-  const online = Object.fromEntries(statuses.map((s) => [s.botKey, Date.now() - s.heartbeatAt.getTime() < ONLINE_MS]));
+  const [guild, states] = await Promise.all([prisma.guildInfo.findUnique({ where: { id: 1 } }), getBotStates(modules.map((m) => m.key))]);
+  const online = Object.fromEntries(Object.entries(states).map(([k, s]) => [k, s.tone]));
 
   return (
     <ToastProvider>

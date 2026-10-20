@@ -2,6 +2,8 @@ import Link from "next/link";
 import { formatNumber, prisma, startOfUtcDay } from "@flamebot/core";
 import { requirePage } from "@/lib/auth";
 import { AutoRefresh } from "@/components/AutoRefresh";
+import { BotPower } from "@/components/BotPower";
+import { getBotStates } from "@/lib/botState";
 import { PageHead } from "@/components/Fields";
 
 export const metadata = { title: "Scrap Rank" };
@@ -9,7 +11,8 @@ export const metadata = { title: "Scrap Rank" };
 const DAYS = 14;
 
 export default async function RatingOverview() {
-  await requirePage();
+  const user = await requirePage();
+  const botState = (await getBotStates(["rating"])).rating!;
   const today = startOfUtcDay();
   const from = new Date(today.getTime() - (DAYS - 1) * 86_400_000);
 
@@ -37,7 +40,10 @@ export default async function RatingOverview() {
   return (
     <>
       <PageHead title="Scrap Rank" hint="Сводка по активности и экономике сервера.">
-        <AutoRefresh seconds={10} />
+        <div className="head-actions">
+          <AutoRefresh seconds={10} />
+          <BotPower botKey="rating" title="Scrap Rank" state={botState} canControl={user.level === "full"} />
+        </div>
       </PageHead>
 
       {problems > 0 && (

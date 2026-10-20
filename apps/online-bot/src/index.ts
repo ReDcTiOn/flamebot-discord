@@ -1,9 +1,9 @@
-import { loadPrivateKey, openSecret, prisma, secretContext, type OnlineServer, type OnlineSettings } from "@flamebot/core";
+import { isBotEnabled, loadPrivateKey, openSecret, prisma, reportBotState, secretContext, type OnlineServer, type OnlineSettings } from "@flamebot/core";
 import { config } from "./config.js";
 import { BOT_KEY, event, log } from "./events.js";
 import { ServerWorker } from "./worker.js";
 
-const RECONCILE_MS = 10_000;
+const RECONCILE_MS = 5_000;
 
 const { key: privateKey, publicKey } = loadPrivateKey(config.ONLINE_SECRET_KEY);
 const workers = new Map<number, { worker: ServerWorker; signature: string }>();
@@ -18,7 +18,28 @@ function decrypt(server: OnlineServer, field: "rconPassword" | "discordToken", s
 }
 
 // Сверяет запущенные серверы с базой: новые запускает, изменённые перезапускает, удалённые останавливает.
+let paused = false;
+
 async function reconcile(): Promise<void> {
+  // Бот выключен из панели: отключаем все Discord-боты серверов и ждём команды на запуск.
+  if (!(await isBotEnabled(prisma, BOT_KEY))) {
+    if (!paused) {
+      paused = true;
+      for (const id of [...workers.keys()]) await stopWorker(id);
+      await prisma.onlineServerStatus.updateMany({ data: { state: "DISABLED", players: null, maxPlayers: null, queued: null } });
+      await reportBotState(prisma, BOT_KEY, "paused");
+      log("info", "Остановка по команде из панели");
+      event("bot.paused", "Бот онлайна остановлен из панели: все боты серверов отключены от Discord", { level: "WARN" });
+    }
+    return;
+  }
+  if (paused) {
+    paused = false;
+    await reportBotState(prisma, BOT_KEY, "running");
+    log("info", "Запуск по команде из панели");
+    event("bot.resumed", "Бот онлайна запущен из панели");
+  }
+
   const [settings, servers] = await Promise.all([getSettings(), prisma.onlineServer.findMany({ orderBy: { id: "asc" } })]);
   const wanted = new Set<number>();
 
@@ -67,11 +88,7 @@ async function stopWorker(id: number) {
 }
 
 async function heartbeat() {
-  await prisma.botStatus.upsert({
-    where: { botKey: BOT_KEY },
-    create: { botKey: BOT_KEY, heartbeatAt: new Date() },
-    update: { heartbeatAt: new Date() },
-  });
+  await reportBotState(prisma, BOT_KEY, paused ? "paused" : "running");
 }
 
 // Периодическая задача: следующий запуск не начнётся, пока не закончился предыдущий.

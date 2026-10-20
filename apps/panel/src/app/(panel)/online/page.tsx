@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { formatNumber, prisma, type OnlineState } from "@flamebot/core";
 import { AutoRefresh } from "@/components/AutoRefresh";
+import { BotPower } from "@/components/BotPower";
+import { getBotStates } from "@/lib/botState";
 import { EmptyState, PageHead } from "@/components/Fields";
 import { requirePage } from "@/lib/auth";
 
@@ -22,7 +24,8 @@ function ago(d: Date | null | undefined): string {
 }
 
 export default async function OnlineOverview() {
-  await requirePage();
+  const user = await requirePage();
+  const botState = (await getBotStates(["online"])).online!;
   const [servers, status, problems] = await Promise.all([
     prisma.onlineServer.findMany({ orderBy: [{ sortOrder: "asc" }, { id: "asc" }], include: { status: true } }),
     prisma.botStatus.findUnique({ where: { botKey: "online" } }),
@@ -38,10 +41,13 @@ export default async function OnlineOverview() {
   return (
     <>
       <PageHead title="Онлайн серверов" hint="Статусы игровых серверов в реальном времени.">
-        <AutoRefresh seconds={5} />
+        <div className="head-actions">
+          <AutoRefresh seconds={5} />
+          <BotPower botKey="online" title="Онлайн серверов" state={botState} canControl={user.level === "full"} />
+        </div>
       </PageHead>
 
-      {!botOnline && (
+      {!botOnline && botState.enabled && (
         <p className="notice warn">
           {status ? "Бот онлайна не отвечает больше 3 минут: проверь контейнер online-bot." : "Бот онлайна ещё не запускался."}
         </p>
