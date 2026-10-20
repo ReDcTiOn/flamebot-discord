@@ -17,7 +17,10 @@ export type {
   GuildChannel,
   GuildInfo,
   BotStatus,
+  ProfileCard,
+  CardAsset,
   AuditLog,
   AdminSession,
   PrismaClient,
 } from "@prisma/client";
+export * from "./cardAssets.js";

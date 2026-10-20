@@ -45,7 +45,8 @@ export type IconName =
   | "mic"
   | "layers"
   | "package"
-  | "search";
+  | "search"
+  | "image";
 
 export const modules: PanelModule[] = [
   {
@@ -62,6 +63,7 @@ export const modules: PanelModule[] = [
           { href: "/rating/xp", label: "Опыт и ранги", icon: "trending" },
           { href: "/rating/rep", label: "Репутация", icon: "thumb" },
           { href: "/rating/members", label: "Игроки", icon: "users" },
+          { href: "/rating/card", label: "Карточка профиля", icon: "image" },
         ],
       },
       {

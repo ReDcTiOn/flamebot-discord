@@ -11,7 +11,10 @@ import {
   shopItemSchema,
   xpSettingsSchema,
 } from "@flamebot/core";
+import { cardAssetIds, cardLayoutSchema } from "@flamebot/core/card";
 import { ActionError, audit, runAction, type ActionResult } from "@/lib/auth";
+import { sanitizeImage } from "@/lib/images";
+import { rateLimit } from "@/lib/rateLimit";
 import { bool, idParam, ids, int, intOrNull, str, strOrNull } from "@/lib/form";
 import { assertChannels, assertGrantableRole } from "@/lib/guild";
 
@@ -236,4 +239,64 @@ export async function resetMember(_prev: ActionResult, fd: FormData): Promise<Ac
     revalidatePath("/rating/members");
     return `Игрок ${before.displayName} обнулён.`;
   });
+}
+
+// ---------- Карточка профиля ----------
+
+export async function saveCardLayout(json: string): Promise<ActionResult> {
+  return runAction("any", async (user) => {
+    if (typeof json !== "string" || json.length > 200_000) throw new ActionError("Шаблон слишком большой");
+    let raw: unknown;
+    try {
+      raw = JSON.parse(json);
+    } catch {
+      throw new ActionError("Шаблон повреждён");
+    }
+    const layout = cardLayoutSchema.parse(raw);
+    const ids = new Set(layout.elements.map((e) => e.id));
+    if (ids.size !== layout.elements.length) throw new ActionError("У элементов повторяются идентификаторы");
+
+    const assetIds = cardAssetIds(layout);
+    const found = await prisma.cardAsset.count({ where: { id: { in: assetIds } } });
+    if (found !== assetIds.length) throw new ActionError("Одна из картинок не найдена. Загрузи её заново.");
+
+    await prisma.profileCard.upsert({ where: { id: 1 }, create: { id: 1, layout }, update: { layout } });
+    // Картинки, которые больше нигде не используются и загружены давно, удаляем.
+    await prisma.cardAsset.deleteMany({
+      where: { id: { notIn: assetIds }, createdAt: { lt: new Date(Date.now() - 24 * 3_600_000) } },
+    });
+    await audit(user, MODULE, "card.update", null, { elements: layout.elements.length, assets: assetIds });
+    revalidatePath("/rating/card");
+    return "Карточка сохранена. Бот начнёт рисовать её в течение 15 секунд.";
+  });
+}
+
+export async function saveProfileCardEnabled(_prev: ActionResult, fd: FormData): Promise<ActionResult> {
+  return runAction("any", async (user) => {
+    const profileCardEnabled = bool(fd, "profileCardEnabled");
+    await saveSettings({ profileCardEnabled });
+    await audit(user, MODULE, "card.toggle", null, { profileCardEnabled });
+    revalidatePath("/rating/card");
+    return profileCardEnabled ? "/profile теперь показывает картинку." : "/profile теперь показывает текстовую карточку.";
+  });
+}
+
+export type UploadResult = { ok: boolean; message: string; asset?: { id: number; width: number; height: number } };
+
+export async function uploadCardAsset(fd: FormData): Promise<UploadResult> {
+  let asset: { id: number; width: number; height: number } | undefined;
+  const result = await runAction("any", async (user) => {
+    if (!rateLimit(`upload:${user.id}`, 20, 10 * 60_000)) throw new ActionError("Слишком много загрузок. Подожди несколько минут.");
+    const file = fd.get("file");
+    if (!(file instanceof File)) throw new ActionError("Выбери файл");
+    const img = await sanitizeImage(file);
+    const row = await prisma.cardAsset.create({
+      data: { mime: img.mime, width: img.width, height: img.height, size: img.data.length, data: new Uint8Array(img.data) },
+      select: { id: true, width: true, height: true },
+    });
+    asset = row;
+    await audit(user, MODULE, "card.upload", `#${row.id}`, { width: row.width, height: row.height, size: img.data.length });
+    return "Картинка загружена.";
+  });
+  return { ok: result?.ok ?? false, message: result?.message ?? "Не получилось загрузить картинку", asset };
 }

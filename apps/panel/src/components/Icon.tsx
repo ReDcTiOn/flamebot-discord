@@ -3,6 +3,7 @@ import {
   Coins,
   Hash,
   House,
+  Image as ImageIcon,
   Layers,
   LayoutDashboard,
   List,
@@ -44,6 +45,7 @@ const ICONS: Record<IconName, LucideIcon> = {
   layers: Layers,
   package: Package,
   search: Search,
+  image: ImageIcon,
 };
 
 export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {

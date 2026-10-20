@@ -26,6 +26,9 @@ const ACTIONS: Record<string, string> = {
   "shop.delete": "Удалил товар",
   "member.adjust": "Изменил баланс игрока",
   "member.reset": "Обнулил игрока",
+  "card.update": "Изменил карточку профиля",
+  "card.toggle": "Переключил вид /profile",
+  "card.upload": "Загрузил картинку для карточки",
 };
 
 export default async function AuditPage({ searchParams }: { searchParams: Promise<{ module?: string; page?: string }> }) {

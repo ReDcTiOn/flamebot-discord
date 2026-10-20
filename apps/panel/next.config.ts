@@ -13,6 +13,12 @@ const config: NextConfig = {
   outputFileTracingRoot: path.resolve(process.cwd(), "../.."),
   poweredByHeader: false,
   reactStrictMode: true,
+  // Нативный модуль для проверки и перекодирования загруженных картинок.
+  serverExternalPackages: ["@napi-rs/canvas"],
+  experimental: {
+    // Загрузка фона карточки до 5 МБ плюс запас на multipart.
+    serverActions: { bodySizeLimit: "6mb" },
+  },
   // Заголовки безопасности, не зависящие от запроса. CSP с nonce ставится в src/proxy.ts.
   async headers() {
     return [

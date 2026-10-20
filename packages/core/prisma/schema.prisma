@@ -47,6 +47,9 @@ model RatingSettings {
   repSameTargetDays Int @default(7)
   repMinMemberDays  Int @default(3)
 
+  // /profile картинкой (true) или текстовой карточкой (false).
+  profileCardEnabled Boolean @default(true)
+
   updatedAt DateTime @updatedAt
 }
 
@@ -155,6 +158,26 @@ model MemberBadge {
   createdAt DateTime @default(now())
 
   @@unique([memberId, label])
+}
+
+// Шаблон картинки /profile. Единственная строка с id = 1, layout проверяется
+// схемой cardLayoutSchema из packages/core/src/card.
+model ProfileCard {
+  id        Int      @id @default(1)
+  layout    Json
+  updatedAt DateTime @updatedAt
+}
+
+// Картинки для карточки (фон, логотипы). Хранятся в базе, потому что контейнеры
+// работают с read-only файловой системой. Панель перекодирует каждую загрузку.
+model CardAsset {
+  id        Int      @id @default(autoincrement())
+  mime      String
+  width     Int
+  height    Int
+  size      Int
+  data      Bytes
+  createdAt DateTime @default(now())
 }
 
 model DailyStat {

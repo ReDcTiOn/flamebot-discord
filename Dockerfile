@@ -40,6 +40,8 @@ ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 WORKDIR /app
 COPY --from=build --chown=node:node /app/apps/panel/.next/standalone ./
 COPY --from=build --chown=node:node /app/apps/panel/.next/static ./apps/panel/.next/static
+# Шрифты карточки профиля для редактора.
+COPY --from=build --chown=node:node /app/packages/core/assets ./packages/core/assets
 USER node
 EXPOSE 3000
 CMD ["node", "apps/panel/server.js"]
