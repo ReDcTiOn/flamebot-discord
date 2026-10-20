@@ -48,6 +48,11 @@ model RatingSettings {
   repSameTargetDays Int @default(7)
   repMinMemberDays  Int @default(3)
 
+  // Личные роли проходят проверку администрации перед выдачей.
+  customRoleApproval Boolean @default(true)
+  // Канал, куда приходят заявки на личные роли.
+  approvalChannelId  String?
+
   // /profile картинкой (true) или текстовой карточкой (false).
   profileCardEnabled Boolean @default(true)
 
@@ -145,10 +150,39 @@ model Purchase {
   active     Boolean   @default(true)
   member     Member    @relation(fields: [memberId], references: [id], onDelete: Cascade)
   item       ShopItem  @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  request    CustomRoleRequest?
   createdAt  DateTime  @default(now())
 
   @@index([active, expiresAt])
   @@index([memberId])
+}
+
+enum CustomRoleRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+// Заявка на личную роль. Скрап списан при подаче и возвращается при отказе.
+model CustomRoleRequest {
+  id            Int                     @id @default(autoincrement())
+  purchaseId    Int                     @unique
+  purchase      Purchase                @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  memberId      String
+  name          String
+  color         Int?
+  status        CustomRoleRequestStatus @default(PENDING)
+  channelId     String?
+  messageId     String?
+  decidedById   String?
+  decidedByName String?
+  reason        String?
+  createdAt     DateTime                @default(now())
+  decidedAt     DateTime?
+
+  @@index([status, createdAt])
+  @@index([memberId, status])
 }
 
 model MemberBadge {

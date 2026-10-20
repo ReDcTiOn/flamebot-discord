@@ -15,6 +15,7 @@ import {
 import { formatNumber, prisma, startOfUtcDay, type ShopItem } from "@flamebot/core";
 import { log } from "../logger.js";
 import { ensureMember } from "../services/members.js";
+import { approvalChannelReady, createCustomRole, hasPendingRequest, postRequest, refundPurchase } from "../services/customRoles.js";
 import { checkLiveRole, grantRole } from "../services/roles.js";
 import { withLock } from "../util.js";
 import { SCRAP, UI, V2, V2_EPHEMERAL, button, buttonRow, divider, notice, text } from "../ui.js";
@@ -54,7 +55,7 @@ async function purchase(
   interaction: MessageComponentInteraction<"cached"> | ModalSubmitInteraction<"cached">,
   item: ShopItem,
   customRole?: { name: string; color: number | null },
-): Promise<{ item: ShopItem; expiresAt: Date | null; balance: number }> {
+): Promise<PurchaseResult> {
   const member: GuildMember = interaction.member;
   const guild = interaction.guild;
 
@@ -75,9 +76,15 @@ async function purchase(
       if (!active && member.roles.cache.has(item.roleId!)) throw new PurchaseError("У тебя уже есть эта роль.");
       if (active && !item.durationDays) throw new PurchaseError("Ты уже купил эту роль навсегда.");
     }
+    let approval = { on: false, channelId: null as string | null, ok: true };
     if (item.type === "CUSTOM_ROLE") {
       if (active) throw new PurchaseError("У тебя уже есть личная роль. Дождись окончания срока.");
+      if (await hasPendingRequest(member.id)) throw new PurchaseError("Твоя заявка на личную роль уже на проверке. Дождись решения.");
       if (!guild.members.me?.permissions.has("ManageRoles")) throw new PurchaseError("У бота нет права управлять ролями.");
+      approval = await approvalChannelReady(guild);
+      if (approval.on && !approval.ok) {
+        throw new PurchaseError("Личные роли сейчас недоступны: администрация ещё не настроила проверку заявок.");
+      }
     }
     if (item.type === "BADGE") {
       const has = await prisma.memberBadge.findUnique({
@@ -129,29 +136,40 @@ async function purchase(
           price: item.price,
           roleId: item.type === "ROLE" ? item.roleId : null,
           customName: customRole?.name ?? null,
-          expiresAt,
-          active: item.type !== "BADGE",
+          // Личная роль на проверке активируется только после одобрения.
+          expiresAt: approval.on ? null : expiresAt,
+          active: item.type !== "BADGE" && !approval.on,
         },
       });
     });
+
+    // Личная роль с проверкой: создаём заявку и отправляем её в канал администрации.
+    if (item.type === "CUSTOM_ROLE" && approval.on) {
+      const request = await prisma.customRoleRequest.create({
+        data: { purchaseId: record.id, memberId: member.id, name: customRole!.name, color: customRole!.color },
+      });
+      let posted = false;
+      try {
+        posted = await postRequest(guild, approval.channelId!, request, item, member.user);
+      } catch (err) {
+        log.warn(`Не удалось отправить заявку #${request.id}`, err);
+      }
+      if (!posted) {
+        await prisma.customRoleRequest.delete({ where: { id: request.id } });
+        await refundPurchase({ ...record, item });
+        throw new PurchaseError("Не получилось отправить заявку администрации. Скрап вернули, попробуй позже.");
+      }
+      const balance = (await prisma.member.findUnique({ where: { id: member.id }, select: { scrap: true } }))?.scrap ?? 0;
+      return { item, expiresAt: null, balance, pending: true, roleName: customRole!.name };
+    }
 
     try {
       if (item.type === "ROLE") {
         const res = await grantRole(member, item.roleId!, `Scrap Rank: покупка #${record.id}`);
         if (!res.ok) throw new PurchaseError(res.reason);
       } else if (item.type === "CUSTOM_ROLE") {
-        const role = await guild.roles.create({
-          name: customRole!.name,
-          color: customRole!.color ?? 0,
-          permissions: [],
-          mentionable: false,
-          hoist: false,
-          reason: `Scrap Rank: личная роль, покупка #${record.id}`,
-        });
-        const top = guild.members.me?.roles.highest.position ?? 1;
-        await role.setPosition(Math.max(1, top - 1)).catch(() => undefined);
-        await member.roles.add(role, `Scrap Rank: покупка #${record.id}`);
-        await prisma.purchase.update({ where: { id: record.id }, data: { roleId: role.id } });
+        const roleId = await createCustomRole(guild, member, customRole!.name, customRole!.color, record.id);
+        await prisma.purchase.update({ where: { id: record.id }, data: { roleId } });
       } else {
         await prisma.memberBadge.create({ data: { memberId: member.id, label: item.badgeLabel! } });
       }
@@ -174,9 +192,11 @@ async function purchase(
     }
 
     const balance = (await prisma.member.findUnique({ where: { id: member.id }, select: { scrap: true } }))?.scrap ?? 0;
-    return { item, expiresAt, balance };
+    return { item, expiresAt, balance, pending: false, roleName: customRole?.name ?? null };
   });
 }
+
+type PurchaseResult = { item: ShopItem; expiresAt: Date | null; balance: number; pending: boolean; roleName: string | null };
 
 const PAGE_SIZE = 8;
 const TYPE_EMOJI: Record<ShopItem["type"], string> = { ROLE: "🎨", CUSTOM_ROLE: "👑", BADGE: "🏅" };
@@ -254,7 +274,15 @@ export function confirmView(item: ShopItem, balance: number) {
     );
 }
 
-export function doneView(res: { item: ShopItem; expiresAt: Date | null; balance: number }) {
+export function doneView(res: PurchaseResult) {
+  if (res.pending) {
+    return notice(
+      UI.info,
+      "⏳ Заявка отправлена на проверку",
+      `Название **${escapeMarkdown(res.roleName ?? "")}** проверит администрация. Списано **${formatNumber(res.item.price)}** ${SCRAP}, они вернутся, если заявку отклонят.\n-# Решение придёт в личные сообщения.`,
+      button("shop:page:0", "В магазин", ButtonStyle.Secondary, "🛒"),
+    );
+  }
   const until = res.expiresAt ? `Действует до **${res.expiresAt.toLocaleDateString("ru-RU")}**.` : "Навсегда.";
   return notice(
     UI.success,

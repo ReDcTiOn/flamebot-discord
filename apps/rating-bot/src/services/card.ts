@@ -6,7 +6,7 @@ import { log } from "../logger.js";
 
 let fontsReady = false;
 
-function registerFonts() {
+export function registerFonts() {
   if (fontsReady) return;
   const dir = cardFontsDir();
   for (const font of Object.values(CARD_FONTS)) {

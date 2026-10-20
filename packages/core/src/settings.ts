@@ -34,6 +34,16 @@ export const channelSettingsSchema = z.object({
   commandChannelIds: snowflakeList,
 });
 
+export const customRoleSettingsSchema = z
+  .object({
+    customRoleApproval: z.boolean(),
+    approvalChannelId: snowflake.nullable(),
+  })
+  .refine((v) => !v.customRoleApproval || v.approvalChannelId, {
+    message: "Выбери канал, куда будут приходить заявки",
+    path: ["approvalChannelId"],
+  });
+
 export const messageSettingsSchema = z.object({
   rankUpMessage: z.string().trim().min(1).max(500),
 });

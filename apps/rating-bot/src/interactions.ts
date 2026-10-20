@@ -1,12 +1,19 @@
 import { MessageFlags, type Interaction, type RepliableInteraction } from "discord.js";
 import { config } from "./config.js";
 import { commands } from "./commands/index.js";
+import type { Command } from "./commands/types.js";
+import { customRoleHandler } from "./services/customRoles.js";
 import { log } from "./logger.js";
 import { getState } from "./state.js";
 import { RateLimiter } from "./util.js";
 
 const byName = new Map(commands.map((c) => [c.data.name, c]));
-const byPrefix = new Map(commands.filter((c) => c.componentPrefix).map((c) => [c.componentPrefix!, c]));
+// Кнопки и окна: у команд свой префикс customId, плюс отдельные обработчики без команды.
+type ComponentHandler = Pick<Command, "handleComponent" | "handleModal">;
+const byPrefix = new Map<string, ComponentHandler>([
+  ...commands.filter((c) => c.componentPrefix).map((c) => [c.componentPrefix!, c] as const),
+  [customRoleHandler.prefix, customRoleHandler as ComponentHandler],
+]);
 
 // Не больше 5 действий за 10 секунд от одного человека.
 const limiter = new RateLimiter(5, 10_000);

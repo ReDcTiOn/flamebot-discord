@@ -1,28 +1,34 @@
 import { Plus } from "lucide-react";
-import { formatNumber, prisma } from "@flamebot/core";
+import { formatNumber, getRatingSettings, prisma } from "@flamebot/core";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
-import { EmptyState, PageHead, Section, Tabs, pickTab } from "@/components/Fields";
+import { EmptyState, FieldRow, PageHead, Section, Switch, Tabs, pickTab } from "@/components/Fields";
 import { Icon } from "@/components/Icon";
 import { ShopItemFields, type RoleOption } from "@/components/ShopItemFields";
 import { ModalCancel, ModalTrigger } from "@/components/ui/Modal";
 import { requirePage } from "@/lib/auth";
-import { listRoles } from "@/lib/guild";
-import { createShopItem, deleteShopItem, updateShopItem } from "../actions";
+import { listRoles, listTextChannels } from "@/lib/guild";
+import { createShopItem, deleteShopItem, saveCustomRoleSettings, updateShopItem } from "../actions";
 
 export const metadata = { title: "Магазин" };
 
-const TABS = [
-  { key: "items", label: "Товары" },
-  { key: "history", label: "История покупок" },
-] as const;
+const TAB_KEYS = ["items", "requests", "history"] as const;
+
+const REQUEST_STATUS = {
+  PENDING: { label: "Ждёт решения", chip: "chip accent" },
+  APPROVED: { label: "Одобрена", chip: "chip success" },
+  REJECTED: { label: "Отклонена", chip: "chip danger" },
+  EXPIRED: { label: "Истекла", chip: "chip" },
+} as const;
+
+const hex = (color: number | null) => (color === null ? null : `#${color.toString(16).padStart(6, "0")}`);
 
 const TYPE_LABEL = { ROLE: "Роль сервера", CUSTOM_ROLE: "Личная роль", BADGE: "Бейдж" } as const;
 const TYPE_ICON = { ROLE: "palette", CUSTOM_ROLE: "users", BADGE: "package" } as const;
 
 export default async function ShopPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   await requirePage();
-  const tab = pickTab((await searchParams).tab, TABS.map((t) => t.key));
-  const [items, rolesFull, recent] = await Promise.all([
+  const tab = pickTab((await searchParams).tab, TAB_KEYS);
+  const [items, rolesFull, recent, pendingCount, settings, channels, requests] = await Promise.all([
     prisma.shopItem.findMany({
       orderBy: [{ sortOrder: "asc" }, { price: "asc" }],
       include: { _count: { select: { purchases: true } } },
@@ -31,7 +37,22 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
     tab === "history"
       ? prisma.purchase.findMany({ orderBy: { createdAt: "desc" }, take: 50, include: { item: true, member: true } })
       : Promise.resolve([]),
+    prisma.customRoleRequest.count({ where: { status: "PENDING" } }),
+    getRatingSettings(prisma),
+    tab === "requests" ? listTextChannels() : Promise.resolve([]),
+    tab === "requests"
+      ? prisma.customRoleRequest.findMany({
+          orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+          take: 50,
+          include: { purchase: { include: { member: true, item: true } } },
+        })
+      : Promise.resolve([]),
   ]);
+  const TABS = [
+    { key: "items", label: "Товары" },
+    { key: "requests", label: pendingCount > 0 ? `Заявки · ${pendingCount}` : "Заявки" },
+    { key: "history", label: "История покупок" },
+  ];
   const roles: RoleOption[] = rolesFull.map((r) => ({ id: r.id, name: r.name, safe: r.safe, reason: r.reason }));
   const roleName = new Map(rolesFull.map((r) => [r.id, r.name]));
 
@@ -62,7 +83,7 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
       <PageHead title="Магазин" hint="Что игроки покупают за скрап командой /shop. Роли с правами модерации продавать нельзя.">
         {tab === "items" && addButton}
       </PageHead>
-      <Tabs tabs={[...TABS]} active={tab} base="/rating/shop" />
+      <Tabs tabs={TABS} active={tab} base="/rating/shop" />
 
       {tab === "items" &&
         (items.length === 0 ? (
@@ -130,6 +151,81 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
             </div>
           </Section>
         ))}
+
+      {tab === "requests" && (
+        <>
+          <ActionForm action={saveCustomRoleSettings}>
+            <Section title="Проверка личных ролей" hint="Пока проверка включена, личная роль выдаётся только после одобрения в Discord.">
+              <div className="tiles">
+                <FieldRow icon="shield" label="Согласовывать личные роли" hint="Скрап списывается сразу и возвращается игроку, если заявку отклонят">
+                  <Switch name="customRoleApproval" defaultChecked={settings.customRoleApproval} label="Согласовывать личные роли" />
+                </FieldRow>
+                <FieldRow icon="hash" label="Канал для заявок" hint="Туда бот присылает заявки с кнопками «Одобрить» и «Отклонить»">
+                  <select name="approvalChannelId" defaultValue={settings.approvalChannelId ?? ""} style={{ minWidth: 240 }} aria-label="Канал для заявок">
+                    <option value="">Не выбран</option>
+                    {channels.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        # {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </FieldRow>
+              </div>
+              {settings.customRoleApproval && !settings.approvalChannelId && (
+                <p className="notice warn" style={{ marginTop: 10 }}>
+                  Канал не выбран: сейчас личные роли купить нельзя. Выбери канал или выключи проверку.
+                </p>
+              )}
+              <p className="muted" style={{ fontSize: 12.5, marginTop: 10 }}>
+                Решать заявки могут владелец, администраторы, люди с правом «Управлять ролями» и роли с доступом к панели. Боту нужны права на просмотр
+                канала и отправку сообщений в нём, а для картинки-превью ещё «Прикреплять файлы».
+              </p>
+            </Section>
+            <div className="save-bar">
+              <SubmitButton>Сохранить</SubmitButton>
+            </div>
+          </ActionForm>
+
+          <Section title="Заявки" hint="Последние 50. Решение принимается кнопками в Discord, здесь — история.">
+            {requests.length === 0 ? (
+              <EmptyState icon="users" title="Заявок пока нет" hint="Они появятся, когда кто-нибудь купит личную роль." />
+            ) : (
+              <div className="card" style={{ padding: "8px 8px 4px" }}>
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Игрок</th>
+                      <th>Название</th>
+                      <th>Статус</th>
+                      <th>Кто решил</th>
+                      <th>Когда</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {requests.map((r) => (
+                      <tr key={r.id}>
+                        <td>{r.purchase.member.displayName}</td>
+                        <td>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                            <span className="dot" style={{ background: hex(r.color) ?? "var(--text-secondary)" }} />
+                            <span style={{ color: hex(r.color) ?? undefined, fontWeight: 500 }}>{r.name}</span>
+                          </span>
+                        </td>
+                        <td>
+                          <span className={REQUEST_STATUS[r.status].chip}>{REQUEST_STATUS[r.status].label}</span>
+                          {r.reason && <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>{r.reason}</div>}
+                        </td>
+                        <td className="secondary">{r.decidedByName ?? "—"}</td>
+                        <td className="secondary">{(r.decidedAt ?? r.createdAt).toLocaleString("ru-RU")}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Section>
+        </>
+      )}
 
       {tab === "history" &&
         (recent.length === 0 ? (

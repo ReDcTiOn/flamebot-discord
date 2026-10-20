@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import {
   channelSettingsSchema,
+  customRoleSettingsSchema,
   memberAdjustSchema,
   messageSettingsSchema,
   prisma,
@@ -305,4 +306,22 @@ export async function uploadCardAsset(fd: FormData): Promise<UploadResult> {
     return "Картинка загружена.";
   });
   return { ok: result?.ok ?? false, message: result?.message ?? "Не получилось загрузить картинку", asset };
+}
+
+// ---------- Проверка личных ролей ----------
+
+export async function saveCustomRoleSettings(_prev: ActionResult, fd: FormData): Promise<ActionResult> {
+  return runAction("any", async (user) => {
+    const data = customRoleSettingsSchema.parse({
+      customRoleApproval: bool(fd, "customRoleApproval"),
+      approvalChannelId: strOrNull(fd, "approvalChannelId"),
+    });
+    await assertChannels([data.approvalChannelId]);
+    await saveSettings(data);
+    await audit(user, MODULE, "customrole.settings", null, data);
+    revalidatePath("/rating/shop");
+    return data.customRoleApproval
+      ? "Проверка включена: личные роли будут приходить заявками в выбранный канал."
+      : "Проверка выключена: личные роли выдаются сразу после покупки.";
+  });
 }

@@ -18,6 +18,8 @@ export type {
   GuildInfo,
   BotStatus,
   ProfileCard,
+  CustomRoleRequest,
+  CustomRoleRequestStatus,
   CardAsset,
   AuditLog,
   AdminSession,

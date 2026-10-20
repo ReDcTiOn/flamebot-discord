@@ -3,6 +3,7 @@ import { prisma, rankForXp } from "@flamebot/core";
 import { log } from "../logger.js";
 import { getState } from "../state.js";
 import { applyRank } from "./ranks.js";
+import { expireOldRequests } from "./customRoles.js";
 import { revokeRole } from "./roles.js";
 
 function isUnknownMember(err: unknown): boolean {
@@ -70,4 +71,5 @@ export async function processRoleSyncQueue(guild: Guild): Promise<void> {
 export function startJobs(guild: Guild, every: (fn: () => Promise<void>, ms: number) => void): void {
   every(() => expirePurchases(guild), 5 * 60_000);
   every(() => processRoleSyncQueue(guild), 30_000);
+  every(() => expireOldRequests(guild), 30 * 60_000);
 }
