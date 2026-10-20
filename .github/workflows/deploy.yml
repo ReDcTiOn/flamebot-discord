@@ -1,0 +1,56 @@
+# Автодеплой на VPS: после зелёного CI на ветке dev обновляется тестовая копия,
+# на main — рабочая. Включается переменной репозитория DEPLOY_ENABLED=true,
+# настройка в docs/DEPLOY.md. Ключ деплоя на сервере умеет только запустить обновление.
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Какую копию обновить
+        type: choice
+        options: [staging, prod]
+        default: staging
+
+permissions: {}
+
+concurrency:
+  group: deploy-${{ github.event_name == 'workflow_dispatch' && inputs.target || github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Только свои push в main/dev после успешного CI. Pull request из чужих форков сюда не попадают.
+    if: >-
+      vars.DEPLOY_ENABLED == 'true' && (
+        github.event_name == 'workflow_dispatch' || (
+          github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_repository.full_name == github.repository &&
+          (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'dev')
+        )
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # В настройках репозитория у окружения production можно включить ручное подтверждение.
+    environment: ${{ (github.event_name == 'workflow_dispatch' && inputs.target || (github.event.workflow_run.head_branch == 'main' && 'prod' || 'staging')) == 'prod' && 'production' || 'staging' }}
+    env:
+      TARGET: ${{ github.event_name == 'workflow_dispatch' && inputs.target || (github.event.workflow_run.head_branch == 'main' && 'prod' || 'staging') }}
+    steps:
+      - name: Обновить ${{ env.TARGET }} на сервере
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          PORT: ${{ secrets.DEPLOY_PORT || '22' }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          ssh -i ~/.ssh/deploy_key -p "$PORT" \
+            -o BatchMode=yes -o StrictHostKeyChecking=yes -o ServerAliveInterval=30 \
+            "flamebot@$HOST" "$TARGET"

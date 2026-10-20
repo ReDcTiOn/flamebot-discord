@@ -1,0 +1,14 @@
+# Образец для /etc/caddy/Caddyfile. Замени домены на свои: у каждого должна быть
+# A-запись на IP сервера. Caddy сам выпустит и будет продлевать HTTPS-сертификаты.
+# После правки: sudo systemctl reload caddy
+
+panel.example.com {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:3000
+}
+
+# Тестовая копия (ветка dev). Удали блок, если тестовая копия не нужна.
+staging.example.com {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:3001
+}

@@ -13,3 +13,9 @@ next-env.d.ts
 !.env.example
 *.pem
 *.key
+
+# Резервные копии базы (deploy/backup.sh)
+backups/
+
+# Блокировка deploy/update.sh
+.deploy.lock

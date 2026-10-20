@@ -94,24 +94,15 @@ pnpm test
 
 ## Запуск на сервере
 
-На VPS с Docker:
+Пошаговая инструкция для VPS на Ubuntu — в [docs/DEPLOY.md](docs/DEPLOY.md): подготовка сервера одним скриптом,
+HTTPS через Caddy, перенос базы с ПК, тестовая копия на ветке `dev` и автодеплой из GitHub.
+
+Коротко: на сервере обновление — одна команда, она делает резервную копию базы, собирает новую версию,
+проверяет её и при ошибке возвращает прошлую:
 
 ```bash
-cp .env.example .env
-docker compose up -d --build
+./deploy/update.sh
 ```
-
-Compose сам применит миграции базы (сервис `migrate`), затем запустит бота и панель. Обновление после `git pull` — та же команда.
-
-Панель слушает только `127.0.0.1:3000`. Наружу её выставляет reverse proxy с HTTPS, например Caddy:
-
-```
-panel.example.com {
-    reverse_proxy 127.0.0.1:3000
-}
-```
-
-С HTTPS панель автоматически включает защищённые cookie (`__Host-`), HSTS и `upgrade-insecure-requests`. В `.env` поставь `PANEL_URL=https://panel.example.com` и `TRUST_PROXY=true`.
 
 ## Как подключить нового бота
 

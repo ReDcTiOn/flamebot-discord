@@ -89,9 +89,10 @@ services:
     tmpfs:
       - /tmp
       - /app/apps/panel/.next/cache
-    # Слушает только localhost. Наружу — через reverse proxy с HTTPS (см. README).
+    # Слушает только localhost. Наружу — через reverse proxy с HTTPS (см. docs/DEPLOY.md).
+    # У тестовой копии на том же сервере свой порт: PANEL_PORT=3001.
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:${PANEL_PORT:-3000}:3000"
     depends_on:
       migrate:
         condition: service_completed_successfully
