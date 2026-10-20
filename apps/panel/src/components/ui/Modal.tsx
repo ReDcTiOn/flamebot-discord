@@ -74,6 +74,7 @@ export function Modal({
 export function ModalTrigger({
   label,
   buttonClass = "btn",
+  buttonLabel,
   title,
   description,
   size,
@@ -81,6 +82,8 @@ export function ModalTrigger({
 }: {
   label: ReactNode;
   buttonClass?: string;
+  // Подпись для кнопки-иконки: всплывающая подсказка и текст для экранного диктора.
+  buttonLabel?: string;
   title: string;
   description?: ReactNode;
   size?: "sm" | "md" | "lg";
@@ -89,7 +92,7 @@ export function ModalTrigger({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button type="button" className={buttonClass} onClick={() => setOpen(true)}>
+      <button type="button" className={buttonClass} onClick={() => setOpen(true)} title={buttonLabel} aria-label={buttonLabel}>
         {label}
       </button>
       <Modal open={open} onClose={() => setOpen(false)} title={title} description={description} size={size}>

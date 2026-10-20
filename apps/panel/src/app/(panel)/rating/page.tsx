@@ -6,7 +6,7 @@ import { BotPower } from "@/components/BotPower";
 import { getBotStates } from "@/lib/botState";
 import { PageHead } from "@/components/Fields";
 
-export const metadata = { title: "Scrap Rank" };
+export const metadata = { title: "Рейтинг участников" };
 
 const DAYS = 14;
 
@@ -39,10 +39,10 @@ export default async function RatingOverview() {
 
   return (
     <>
-      <PageHead title="Scrap Rank" hint="Сводка по активности и экономике сервера.">
+      <PageHead title="Рейтинг участников" hint="Сводка по активности и экономике сервера.">
         <div className="head-actions">
           <AutoRefresh seconds={10} />
-          <BotPower botKey="rating" title="Scrap Rank" state={botState} canControl={user.level === "full"} />
+          <BotPower botKey="rating" title="Рейтинг участников" state={botState} canControl={user.level === "full"} />
         </div>
       </PageHead>
 

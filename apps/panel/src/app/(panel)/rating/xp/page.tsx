@@ -1,6 +1,6 @@
-import { Plus } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { formatNumber, getRatingSettings, messageReward, prisma, type Rank } from "@flamebot/core";
-import { ActionForm, SubmitButton } from "@/components/ActionForm";
+import { ActionForm, IconSubmit, SubmitButton } from "@/components/ActionForm";
 import { EmptyState, FieldRow, NumberInput, PageHead, RoleSelect, Section, Switch, Tabs, pickTab } from "@/components/Fields";
 import { ModalCancel, ModalTrigger } from "@/components/ui/Modal";
 import { requirePage } from "@/lib/auth";
@@ -190,7 +190,13 @@ export default async function XpPage({ searchParams }: { searchParams: Promise<{
                       </div>
                     </div>
                     <div className="row-actions">
-                      <ModalTrigger label="Изменить" buttonClass="btn small" title={`Ранг «${r.name}»`} description="Роли участников пересчитаются в фоне после сохранения.">
+                      <ModalTrigger
+                        label={<Pencil size={15} aria-hidden="true" />}
+                        buttonClass="icon-btn bordered"
+                        buttonLabel={`Изменить ранг «${r.name}»`}
+                        title={`Ранг «${r.name}»`}
+                        description="Роли участников пересчитаются в фоне после сохранения."
+                      >
                         <ActionForm action={updateRank}>
                           <input type="hidden" name="id" value={r.id} />
                           <RankFields roles={roles} rank={r} defaults={defaults} />
@@ -199,17 +205,19 @@ export default async function XpPage({ searchParams }: { searchParams: Promise<{
                             <SubmitButton>Сохранить</SubmitButton>
                           </div>
                         </ActionForm>
-                        <div className="danger-zone">
-                          <h3>Удалить ранг</h3>
-                          <p className="secondary" style={{ fontSize: 13, marginBottom: 10 }}>
-                            Игроки этого ранга перейдут на предыдущий, роль ранга с них снимется.
-                          </p>
-                          <ActionForm action={deleteRank} confirm={`Удалить ранг «${r.name}»?`} confirmLabel="Удалить" danger>
-                            <input type="hidden" name="id" value={r.id} />
-                            <SubmitButton variant="danger">Удалить ранг</SubmitButton>
-                          </ActionForm>
-                        </div>
                       </ModalTrigger>
+                      <ActionForm
+                        action={deleteRank}
+                        confirm={`Удалить ранг «${r.name}»?`}
+                        confirmMessage="Игроки этого ранга перейдут на предыдущий, роль ранга с них снимется. Отменить нельзя."
+                        confirmLabel="Удалить"
+                        danger
+                      >
+                        <input type="hidden" name="id" value={r.id} />
+                        <IconSubmit label={`Удалить ранг «${r.name}»`} danger>
+                          <Trash2 size={15} aria-hidden="true" />
+                        </IconSubmit>
+                      </ActionForm>
                     </div>
                   </div>
                 ))}

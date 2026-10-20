@@ -53,7 +53,7 @@ export type IconName =
 export const modules: PanelModule[] = [
   {
     key: "rating",
-    title: "Scrap Rank",
+    title: "Рейтинг участников",
     description: "Опыт за общение, ранги, репутация и магазин за скрап",
     icon: "coin",
     color: "#c9822a",

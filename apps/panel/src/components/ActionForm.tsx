@@ -17,6 +17,7 @@ export function ActionForm({
   children,
   className,
   confirm,
+  confirmMessage,
   confirmLabel = "Подтвердить",
   danger = false,
   resetOnSuccess = false,
@@ -25,6 +26,7 @@ export function ActionForm({
   children: ReactNode;
   className?: string;
   confirm?: string;
+  confirmMessage?: ReactNode;
   confirmLabel?: string;
   danger?: boolean;
   resetOnSuccess?: boolean;
@@ -85,6 +87,7 @@ export function ActionForm({
         <ConfirmDialog
           open={asking !== null}
           title={confirm}
+          message={confirmMessage}
           confirmLabel={confirmLabel}
           danger={danger}
           onCancel={() => setAsking(null)}
@@ -104,6 +107,16 @@ export function SubmitButton({ children, variant = "primary" }: { children: Reac
   return (
     <button type="submit" className={`btn ${variant}`} disabled={pending} aria-busy={pending}>
       {pending ? "Сохраняю…" : children}
+    </button>
+  );
+}
+
+// Кнопка-иконка для отправки формы (например, корзина). label — подсказка и текст для экранного диктора.
+export function IconSubmit({ label, children, danger = false }: { label: string; children: ReactNode; danger?: boolean }) {
+  const pending = useContext(PendingContext);
+  return (
+    <button type="submit" className={danger ? "icon-btn bordered danger" : "icon-btn bordered"} disabled={pending} aria-busy={pending} title={label} aria-label={label}>
+      {children}
     </button>
   );
 }

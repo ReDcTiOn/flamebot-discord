@@ -481,3 +481,9 @@ a.member-link:hover { color: #7fb0ff; }
 
 .rank-rewards { border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px 12px; margin: 0; }
 .rank-rewards legend { padding: 0 6px; }
+
+/* Кнопки-иконки в строках списков */
+.icon-btn.bordered { border-color: var(--border-strong); background: var(--surface-2); color: var(--text-secondary); }
+.icon-btn.bordered:hover { background: var(--surface-3); color: var(--text); }
+.icon-btn.bordered.danger:hover { color: var(--danger); background: var(--danger-bg); border-color: #4a2220; }
+.row-actions form { display: inline-flex; }
