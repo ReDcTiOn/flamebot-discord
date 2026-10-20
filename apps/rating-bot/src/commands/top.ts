@@ -1,15 +1,92 @@
-import { EmbedBuilder, MessageFlags, SlashCommandBuilder, escapeMarkdown } from "discord.js";
-import { formatNumber, prisma } from "@flamebot/core";
+import {
+  ButtonStyle,
+  ContainerBuilder,
+  SectionBuilder,
+  SlashCommandBuilder,
+  ThumbnailBuilder,
+  escapeMarkdown,
+  type ButtonInteraction,
+  type ChatInputCommandInteraction,
+} from "discord.js";
+import { formatNumber, prisma, type Rank } from "@flamebot/core";
 import { getState } from "../state.js";
-import { COLORS, type Command } from "./types.js";
+import { SCRAP, UI, V2, avatarUrl, button, buttonRow, divider, text } from "../ui.js";
+import type { Command } from "./types.js";
 
 const CATEGORIES = {
-  xp: { label: "опыту", field: "xp" },
-  rep: { label: "репутации", field: "rep" },
-  scrap: { label: "скрапу", field: "scrap" },
+  xp: { title: "по опыту", button: "Опыт", emoji: "✨", unit: "опыта", field: "xp" },
+  rep: { title: "по репутации", button: "Репутация", emoji: "👍", unit: "репутации", field: "rep" },
+  scrap: { title: "по скрапу", button: "Скрап", emoji: SCRAP, unit: "скрапа", field: "scrap" },
 } as const;
 
 type Category = keyof typeof CATEGORIES;
+const MEDALS = ["🥇", "🥈", "🥉"];
+
+function rankLabel(rank: Rank | null | undefined): string {
+  return rank ? `${rank.emoji ? `${rank.emoji} ` : ""}${escapeMarkdown(rank.name)}` : "без ранга";
+}
+
+export async function buildTop(category: Category, viewerId: string, guildName: string) {
+  const c = CATEGORIES[category];
+  const [rows, me, { ranks }] = await Promise.all([
+    prisma.member.findMany({
+      where: { inGuild: true },
+      orderBy: [{ [c.field]: "desc" }, { createdAt: "asc" }],
+      take: 10,
+      include: { rank: true },
+    }),
+    prisma.member.findUnique({ where: { id: viewerId } }),
+    getState(),
+  ]);
+
+  const container = new ContainerBuilder()
+    .setAccentColor(UI.gold)
+    .addTextDisplayComponents(text(`## 🏆 Топ ${c.title}\n-# ${escapeMarkdown(guildName)} · лучшие 10 игроков`));
+
+  if (rows.length === 0) {
+    container.addSeparatorComponents(divider()).addTextDisplayComponents(text("Пока никого нет в рейтинге. Пишите в чат, и он появится."));
+    return container;
+  }
+
+  container.addSeparatorComponents(divider(true));
+
+  // Первые три места — крупно и с аватаром.
+  rows.slice(0, 3).forEach((r, i) => {
+    const value = `**${formatNumber(r[c.field])}** ${c.unit}`;
+    const extra = category === "xp" ? rankLabel(r.rank ?? ranks[0]) : `${rankLabel(r.rank)} · ${formatNumber(r.xp)} опыта`;
+    container.addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(text(`### ${MEDALS[i]} ${escapeMarkdown(r.displayName)}\n${c.emoji} ${value}\n-# ${extra}`))
+        .setThumbnailAccessory(new ThumbnailBuilder().setURL(avatarUrl(r.id, r.avatarHash)).setDescription(r.displayName.slice(0, 100))),
+    );
+  });
+
+  // Остальные — компактным списком.
+  if (rows.length > 3) {
+    const lines = rows.slice(3).map((r, i) => {
+      const place = String(i + 4).padStart(2, " ");
+      return `\`${place}\`  **${escapeMarkdown(r.displayName)}** — ${formatNumber(r[c.field])} ${c.emoji} · ${rankLabel(r.rank)}`;
+    });
+    container.addSeparatorComponents(divider()).addTextDisplayComponents(text(lines.join("\n")));
+  }
+
+  // Место того, кто вызвал команду.
+  if (me) {
+    const place = (await prisma.member.count({ where: { inGuild: true, [c.field]: { gt: me[c.field] } } })) + 1;
+    container
+      .addSeparatorComponents(divider())
+      .addTextDisplayComponents(text(`-# Твоё место: **#${place}** · ${formatNumber(me[c.field])} ${c.unit}`));
+  }
+
+  container.addActionRowComponents(
+    buttonRow(
+      ...(Object.keys(CATEGORIES) as Category[]).map((k) =>
+        button(`top:${k}`, CATEGORIES[k].button, k === category ? ButtonStyle.Primary : ButtonStyle.Secondary, CATEGORIES[k].emoji).setDisabled(k === category),
+      ),
+    ),
+  );
+  return container;
+}
 
 export const topCommand: Command = {
   data: new SlashCommandBuilder()
@@ -27,40 +104,20 @@ export const topCommand: Command = {
         ),
     )
     .toJSON(),
+  componentPrefix: "top",
 
-  async execute(interaction) {
+  async execute(interaction: ChatInputCommandInteraction<"cached">) {
     const raw = interaction.options.getString("по") ?? "xp";
     const category: Category = raw in CATEGORIES ? (raw as Category) : "xp";
-    const { field, label } = CATEGORIES[category];
+    const container = await buildTop(category, interaction.user.id, interaction.guild.name);
+    await interaction.reply({ components: [container], flags: V2, allowedMentions: { parse: [] } });
+  },
 
-    const [rows, { ranks }] = await Promise.all([
-      prisma.member.findMany({
-        where: { inGuild: true },
-        orderBy: [{ [field]: "desc" }, { createdAt: "asc" }],
-        take: 10,
-        include: { rank: true },
-      }),
-      getState(),
-    ]);
-
-    if (rows.length === 0) {
-      await interaction.reply({ content: "Пока никого нет в рейтинге. Пишите в чат, и он появится.", flags: MessageFlags.Ephemeral });
-      return;
-    }
-
-    const medals = ["🥇", "🥈", "🥉"];
-    const lines = rows.map((r, i) => {
-      const place = medals[i] ?? `\`${String(i + 1).padStart(2, " ")}\``;
-      const rank = r.rank ?? ranks[0];
-      const rankText = rank ? ` · ${rank.emoji ?? ""} ${escapeMarkdown(rank.name)}`.replace("  ", " ") : "";
-      return `${place} **${escapeMarkdown(r.displayName)}** — ${formatNumber(r[field])}${category === "xp" ? rankText : ""}`;
-    });
-
-    const embed = new EmbedBuilder()
-      .setColor(COLORS.brand)
-      .setTitle(`Топ по ${label}`)
-      .setDescription(lines.join("\n"));
-
-    await interaction.reply({ embeds: [embed], allowedMentions: { parse: [] } });
+  async handleComponent(interaction) {
+    if (!interaction.isButton()) return;
+    const raw = interaction.customId.split(":")[1] ?? "xp";
+    const category: Category = raw in CATEGORIES ? (raw as Category) : "xp";
+    const container = await buildTop(category, interaction.user.id, interaction.guild.name);
+    await (interaction as ButtonInteraction<"cached">).update({ components: [container], flags: V2, allowedMentions: { parse: [] } });
   },
 };

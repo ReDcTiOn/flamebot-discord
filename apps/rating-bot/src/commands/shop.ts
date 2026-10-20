@@ -1,12 +1,10 @@
 import {
   ActionRowBuilder,
-  ButtonBuilder,
   ButtonStyle,
-  EmbedBuilder,
-  MessageFlags,
+  ContainerBuilder,
   ModalBuilder,
+  SectionBuilder,
   SlashCommandBuilder,
-  StringSelectMenuBuilder,
   TextInputBuilder,
   TextInputStyle,
   escapeMarkdown,
@@ -19,7 +17,8 @@ import { log } from "../logger.js";
 import { ensureMember } from "../services/members.js";
 import { checkLiveRole, grantRole } from "../services/roles.js";
 import { withLock } from "../util.js";
-import { COLORS, type Command } from "./types.js";
+import { SCRAP, UI, V2, V2_EPHEMERAL, button, buttonRow, divider, notice, text } from "../ui.js";
+import type { Command } from "./types.js";
 
 const DAY = 86_400_000;
 const TYPE_LABEL: Record<ShopItem["type"], string> = {
@@ -43,13 +42,6 @@ function sanitizeRoleName(raw: string): string {
     .trim();
 }
 
-function itemLine(item: ShopItem): string {
-  const duration = item.durationDays ? ` · ${item.durationDays} д.` : "";
-  const stock = item.stock !== null ? ` · осталось ${item.stock}` : "";
-  const desc = item.description ? `\n${escapeMarkdown(item.description)}` : "";
-  return `**${escapeMarkdown(item.name)}** — ${formatNumber(item.price)} скрапа${duration}${stock}${desc}`;
-}
-
 async function loadItem(id: number): Promise<ShopItem | null> {
   if (!Number.isInteger(id) || id <= 0) return null;
   const item = await prisma.shopItem.findUnique({ where: { id } });
@@ -62,7 +54,7 @@ async function purchase(
   interaction: MessageComponentInteraction<"cached"> | ModalSubmitInteraction<"cached">,
   item: ShopItem,
   customRole?: { name: string; color: number | null },
-): Promise<string> {
+): Promise<{ item: ShopItem; expiresAt: Date | null; balance: number }> {
   const member: GuildMember = interaction.member;
   const guild = interaction.guild;
 
@@ -181,21 +173,129 @@ async function purchase(
       );
     }
 
-    const until = expiresAt ? ` до ${expiresAt.toLocaleDateString("ru-RU")}` : "";
-    return `Готово: «${escapeMarkdown(item.name)}»${until}. Списано ${formatNumber(item.price)} скрапа.`;
+    const balance = (await prisma.member.findUnique({ where: { id: member.id }, select: { scrap: true } }))?.scrap ?? 0;
+    return { item, expiresAt, balance };
   });
 }
 
-async function replyError(interaction: MessageComponentInteraction<"cached"> | ModalSubmitInteraction<"cached">, err: unknown) {
-  const content = err instanceof PurchaseError ? err.message : "Что-то пошло не так. Попробуй ещё раз.";
-  if (!(err instanceof PurchaseError)) log.error("Ошибка магазина", err);
-  if (interaction.deferred || interaction.replied) {
-    await interaction.editReply({ content, embeds: [], components: [] });
-  } else if (interaction.isMessageComponent() || interaction.isFromMessage()) {
-    await interaction.update({ content, embeds: [], components: [] });
-  } else {
-    await interaction.reply({ content, flags: MessageFlags.Ephemeral });
+const PAGE_SIZE = 8;
+const TYPE_EMOJI: Record<ShopItem["type"], string> = { ROLE: "🎨", CUSTOM_ROLE: "👑", BADGE: "🏅" };
+
+function itemMeta(item: ShopItem): string {
+  const parts: string[] = [TYPE_LABEL[item.type]];
+  if (item.type === "BADGE") parts.push(`«${escapeMarkdown(item.badgeLabel ?? "")}»`);
+  else parts.push(item.durationDays ? `${item.durationDays} д.` : "навсегда");
+  if (item.stock !== null) parts.push(item.stock > 0 ? `осталось ${item.stock}` : "закончился");
+  return parts.join(" · ");
+}
+
+export async function shopView(member: GuildMember, page: number) {
+  const [items, me] = await Promise.all([
+    prisma.shopItem.findMany({ where: { enabled: true }, orderBy: [{ sortOrder: "asc" }, { price: "asc" }], take: 100 }),
+    ensureMember(member.user, member),
+  ]);
+  const pages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+  const p = Math.min(Math.max(0, page), pages - 1);
+
+  const c = new ContainerBuilder()
+    .setAccentColor(UI.brand)
+    .addTextDisplayComponents(text(`## 🛒 Магазин за скрап\nТвой баланс: **${formatNumber(me.scrap)}** ${SCRAP}`));
+
+  if (items.length === 0) {
+    c.addSeparatorComponents(divider()).addTextDisplayComponents(text("Магазин пока пуст. Загляни позже."));
+    return c;
   }
+  c.addSeparatorComponents(divider(true));
+
+  // Каждый товар — отдельная строка, справа кнопка с ценой.
+  for (const item of items.slice(p * PAGE_SIZE, (p + 1) * PAGE_SIZE)) {
+    const affordable = me.scrap >= item.price;
+    const soldOut = item.stock !== null && item.stock <= 0;
+    const desc = item.description ? `\n${escapeMarkdown(item.description)}` : "";
+    c.addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(text(`${TYPE_EMOJI[item.type]} **${escapeMarkdown(item.name)}**${desc}\n-# ${itemMeta(item)}`))
+        .setButtonAccessory(
+          button(`shop:pick:${item.id}`, formatNumber(item.price), affordable && !soldOut ? ButtonStyle.Success : ButtonStyle.Secondary, SCRAP).setDisabled(soldOut),
+        ),
+    );
+  }
+
+  c.addSeparatorComponents(divider()).addTextDisplayComponents(
+    text(`-# Нажми на цену, чтобы купить. Скрап дают за общение в чате и за новые ранги.${pages > 1 ? ` · Страница ${p + 1} из ${pages}` : ""}`),
+  );
+  if (pages > 1) {
+    c.addActionRowComponents(
+      buttonRow(
+        button(`shop:page:${p - 1}`, "Назад", ButtonStyle.Secondary, "◀️").setDisabled(p === 0),
+        button(`shop:page:${p + 1}`, "Дальше", ButtonStyle.Secondary, "▶️").setDisabled(p >= pages - 1),
+      ),
+    );
+  }
+  return c;
+}
+
+export function confirmView(item: ShopItem, balance: number) {
+  const enough = balance >= item.price;
+  const desc = item.description ? `\n${escapeMarkdown(item.description)}` : "";
+  const after = enough
+    ? `После покупки останется **${formatNumber(balance - item.price)}** ${SCRAP}`
+    : `Не хватает **${formatNumber(item.price - balance)}** ${SCRAP}. Общайся в чате, и скрап накопится.`;
+  return new ContainerBuilder()
+    .setAccentColor(enough ? UI.info : UI.danger)
+    .addTextDisplayComponents(text(`### ${TYPE_EMOJI[item.type]} ${escapeMarkdown(item.name)}${desc}\n-# ${itemMeta(item)}`))
+    .addSeparatorComponents(divider())
+    .addTextDisplayComponents(text(`Цена: **${formatNumber(item.price)}** ${SCRAP} · баланс: **${formatNumber(balance)}** ${SCRAP}\n${after}`))
+    .addActionRowComponents(
+      buttonRow(
+        button(`shop:buy:${item.id}`, `Купить за ${formatNumber(item.price)}`, ButtonStyle.Success, SCRAP).setDisabled(!enough),
+        button("shop:page:0", "Назад", ButtonStyle.Secondary),
+      ),
+    );
+}
+
+export function doneView(res: { item: ShopItem; expiresAt: Date | null; balance: number }) {
+  const until = res.expiresAt ? `Действует до **${res.expiresAt.toLocaleDateString("ru-RU")}**.` : "Навсегда.";
+  return notice(
+    UI.success,
+    `✅ Куплено: ${escapeMarkdown(res.item.name)}`,
+    `${until}\nСписано **${formatNumber(res.item.price)}** ${SCRAP}, осталось **${formatNumber(res.balance)}** ${SCRAP}.`,
+    button("shop:page:0", "В магазин", ButtonStyle.Secondary, "🛒"),
+  );
+}
+
+export function errorView(message: string) {
+  return notice(UI.danger, "Не получилось", message, button("shop:page:0", "В магазин", ButtonStyle.Secondary, "🛒"));
+}
+
+async function replyError(interaction: MessageComponentInteraction<"cached"> | ModalSubmitInteraction<"cached">, err: unknown) {
+  const message = err instanceof PurchaseError ? err.message : "Что-то пошло не так. Попробуй ещё раз.";
+  if (!(err instanceof PurchaseError)) log.error("Ошибка магазина", err);
+  const components = [errorView(message)];
+  if (interaction.deferred || interaction.replied) await interaction.editReply({ components, flags: V2 });
+  else if (interaction.isMessageComponent() || interaction.isFromMessage()) await interaction.update({ components, flags: V2 });
+  else await interaction.reply({ components, flags: V2_EPHEMERAL });
+}
+
+function customRoleModal(item: ShopItem) {
+  return new ModalBuilder()
+    .setCustomId(`shop:custom:${item.id}`)
+    .setTitle("Личная роль")
+    .addComponents(
+      new ActionRowBuilder<TextInputBuilder>().addComponents(
+        new TextInputBuilder().setCustomId("name").setLabel("Название роли").setStyle(TextInputStyle.Short).setMinLength(2).setMaxLength(32).setRequired(true),
+      ),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(
+        new TextInputBuilder()
+          .setCustomId("color")
+          .setLabel("Цвет в формате #RRGGBB (необязательно)")
+          .setStyle(TextInputStyle.Short)
+          .setMinLength(7)
+          .setMaxLength(7)
+          .setPlaceholder("#BA7517")
+          .setRequired(false),
+      ),
+    );
 }
 
 export const shopCommand: Command = {
@@ -203,108 +303,34 @@ export const shopCommand: Command = {
   componentPrefix: "shop",
 
   async execute(interaction) {
-    const [items, me] = await Promise.all([
-      prisma.shopItem.findMany({ where: { enabled: true }, orderBy: [{ sortOrder: "asc" }, { price: "asc" }], take: 25 }),
-      ensureMember(interaction.user, interaction.member),
-    ]);
-
-    if (items.length === 0) {
-      await interaction.reply({ content: "Магазин пока пуст.", flags: MessageFlags.Ephemeral });
-      return;
-    }
-
-    const embed = new EmbedBuilder()
-      .setColor(COLORS.brand)
-      .setTitle("Магазин за скрап")
-      .setDescription(items.map(itemLine).join("\n\n").slice(0, 4000))
-      .setFooter({ text: `Твой баланс: ${formatNumber(me.scrap)} скрапа` });
-
-    const select = new StringSelectMenuBuilder()
-      .setCustomId("shop:pick")
-      .setPlaceholder("Выбери товар")
-      .addOptions(
-        items.map((i) => ({
-          label: i.name.slice(0, 100),
-          description: `${TYPE_LABEL[i.type]} · ${formatNumber(i.price)} скрапа`.slice(0, 100),
-          value: String(i.id),
-        })),
-      );
-
-    await interaction.reply({
-      embeds: [embed],
-      components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)],
-      flags: MessageFlags.Ephemeral,
-    });
+    await interaction.reply({ components: [await shopView(interaction.member, 0)], flags: V2_EPHEMERAL });
   },
 
   async handleComponent(interaction) {
-    const [, action, idRaw] = interaction.customId.split(":");
+    const [, action, raw] = interaction.customId.split(":");
     try {
-      if (action === "cancel") {
-        await interaction.update({ content: "Покупка отменена.", embeds: [], components: [] });
+      if (action === "page") {
+        await interaction.update({ components: [await shopView(interaction.member, Number(raw) || 0)], flags: V2 });
         return;
       }
 
-      const id = Number(action === "pick" && interaction.isStringSelectMenu() ? interaction.values[0] : idRaw);
-      const item = await loadItem(id);
+      const item = await loadItem(Number(raw));
       if (!item) throw new PurchaseError("Этот товар больше не продаётся.");
 
       if (action === "pick") {
         const me = await ensureMember(interaction.user, interaction.member);
-        const buy = new ButtonBuilder()
-          .setCustomId(`shop:buy:${item.id}`)
-          .setLabel(`Купить за ${formatNumber(item.price)}`)
-          .setStyle(ButtonStyle.Success)
-          .setDisabled(me.scrap < item.price);
-        const cancel = new ButtonBuilder().setCustomId("shop:cancel").setLabel("Отмена").setStyle(ButtonStyle.Secondary);
-        const embed = new EmbedBuilder()
-          .setColor(COLORS.info)
-          .setDescription(itemLine(item))
-          .setFooter({
-            text:
-              me.scrap < item.price
-                ? `Не хватает ${formatNumber(item.price - me.scrap)} скрапа`
-                : `После покупки останется ${formatNumber(me.scrap - item.price)} скрапа`,
-          });
-        await interaction.update({
-          embeds: [embed],
-          components: [new ActionRowBuilder<ButtonBuilder>().addComponents(buy, cancel)],
-        });
+        await interaction.update({ components: [confirmView(item, me.scrap)], flags: V2 });
         return;
       }
 
       if (action === "buy") {
         if (item.type === "CUSTOM_ROLE") {
-          const modal = new ModalBuilder()
-            .setCustomId(`shop:custom:${item.id}`)
-            .setTitle("Личная роль")
-            .addComponents(
-              new ActionRowBuilder<TextInputBuilder>().addComponents(
-                new TextInputBuilder()
-                  .setCustomId("name")
-                  .setLabel("Название роли")
-                  .setStyle(TextInputStyle.Short)
-                  .setMinLength(2)
-                  .setMaxLength(32)
-                  .setRequired(true),
-              ),
-              new ActionRowBuilder<TextInputBuilder>().addComponents(
-                new TextInputBuilder()
-                  .setCustomId("color")
-                  .setLabel("Цвет в формате #RRGGBB (необязательно)")
-                  .setStyle(TextInputStyle.Short)
-                  .setMinLength(7)
-                  .setMaxLength(7)
-                  .setPlaceholder("#BA7517")
-                  .setRequired(false),
-              ),
-            );
-          await interaction.showModal(modal);
+          await interaction.showModal(customRoleModal(item));
           return;
         }
         // Выдача роли может занять больше трёх секунд, поэтому сначала подтверждаем нажатие.
         await interaction.deferUpdate();
-        await interaction.editReply({ content: await purchase(interaction, item), embeds: [], components: [] });
+        await interaction.editReply({ components: [doneView(await purchase(interaction, item))], flags: V2 });
       }
     } catch (err) {
       await replyError(interaction, err);
@@ -334,9 +360,8 @@ export const shopCommand: Command = {
       }
 
       if (interaction.isFromMessage()) await interaction.deferUpdate();
-      else await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      const text = await purchase(interaction, item, { name, color });
-      await interaction.editReply({ content: text, embeds: [], components: [] });
+      else await interaction.deferReply({ flags: V2_EPHEMERAL });
+      await interaction.editReply({ components: [doneView(await purchase(interaction, item, { name, color }))], flags: V2 });
     } catch (err) {
       await replyError(interaction, err);
     }
