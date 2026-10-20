@@ -297,14 +297,28 @@ details.edit > summary::-webkit-details-marker { display: none; }
 .main:has(.card-editor) { max-width: 1400px; }
 .card-editor { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; align-items: start; }
 .card-stage { position: sticky; top: 24px; }
-.card-canvas-wrap {
-  background-color: #0c0c0c;
-  background-image: linear-gradient(45deg, #161616 25%, transparent 25%), linear-gradient(-45deg, #161616 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #161616 75%), linear-gradient(-45deg, transparent 75%, #161616 75%);
+.card-canvas-wrap { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 28px; background-color: var(--tile); }
+/* Фон рабочей области: точечная сетка как в макете, клетка для прозрачности или сплошной. */
+.card-canvas-wrap.stage-dots { background-color: #161616; background-image: radial-gradient(circle, #2e2e2e 1px, transparent 1.4px); background-size: 16px 16px; background-position: 8px 8px; }
+.card-canvas-wrap.stage-checker {
+  background-color: #0e0e0e;
+  background-image: linear-gradient(45deg, #1a1a1a 25%, transparent 25%), linear-gradient(-45deg, #1a1a1a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #1a1a1a 75%), linear-gradient(-45deg, transparent 75%, #1a1a1a 75%);
   background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0;
-  border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px;
 }
-.card-canvas { display: block; width: 100%; height: auto; cursor: move; border-radius: 4px; }
+.card-canvas-wrap.stage-plain { background-color: #101010; }
+.card-canvas { display: block; width: 100%; height: auto; border-radius: 4px; touch-action: none; }
 .card-canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.editor-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.tool-group { display: flex; gap: 2px; background: var(--tile); border: 1px solid var(--border); border-radius: var(--radius); padding: 3px; }
+.tool-btn, .tool-text {
+  height: 30px; min-width: 30px; display: grid; place-items: center; padding: 0 6px;
+  background: none; border: none; border-radius: 6px; color: var(--text-secondary); cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 500;
+}
+.tool-btn:hover:not(:disabled), .tool-text:hover { background: var(--surface-3); color: var(--text); }
+.tool-btn:disabled { opacity: 0.3; cursor: default; }
+.tool-btn.on, .tool-text.on { background: var(--surface-3); color: var(--text); }
+.tool-btn.on svg { color: var(--accent); }
+.tool-seg { margin-left: auto; }
 .card-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
 .card-inspector { background: var(--tile); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px; display: flex; flex-direction: column; gap: 12px; }
 .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: var(--bg); border-radius: var(--radius); padding: 3px; }

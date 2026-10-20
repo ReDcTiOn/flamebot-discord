@@ -1,11 +1,26 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { ArrowDown, ArrowUp, Copy, Eye, EyeOff, Trash2 } from "lucide-react";
+import {
+  AlignCenterHorizontal,
+  AlignCenterVertical,
+  AlignEndHorizontal,
+  AlignEndVertical,
+  AlignStartHorizontal,
+  AlignStartVertical,
+  ArrowDown,
+  ArrowUp,
+  Copy,
+  Eye,
+  EyeOff,
+  Magnet,
+  Redo2,
+  Trash2,
+  Undo2,
+  type LucideIcon,
+} from "lucide-react";
 import {
   CARD_FONTS,
-  CARD_FONT_KEYS,
-  CARD_PLACEHOLDERS,
   cardAssetIds,
   cardLayoutSchema,
   elementBounds,
@@ -14,9 +29,26 @@ import {
   type CardElement,
   type CardElementType,
   type CardLayout,
+  type Ctx2D,
 } from "@flamebot/core/card";
 import { saveCardLayout, uploadCardAsset } from "@/app/(panel)/rating/actions";
 import { ColorField, NumField, Row, SelectField } from "./controls";
+import { ElementProps } from "./ElementProps";
+import {
+  CURSOR,
+  alignOffset,
+  handlePoint,
+  handlesFor,
+  hitHandle,
+  resizeElement,
+  snapMove,
+  snapTargets,
+  type AlignKind,
+  type Box,
+  type Guides,
+  type Handle,
+} from "./geometry";
+import { useHistory } from "./useHistory";
 
 const TYPE_LABEL: Record<CardElementType, string> = {
   text: "Текст",
@@ -26,6 +58,22 @@ const TYPE_LABEL: Record<CardElementType, string> = {
   progress: "Прогресс-бар",
   badges: "Бейджи",
 };
+
+const ALIGN_BUTTONS: { kind: AlignKind; label: string; Icon: LucideIcon }[] = [
+  { kind: "left", label: "По левому краю", Icon: AlignStartVertical },
+  { kind: "hcenter", label: "По центру по горизонтали", Icon: AlignCenterVertical },
+  { kind: "right", label: "По правому краю", Icon: AlignEndVertical },
+  { kind: "top", label: "По верхнему краю", Icon: AlignStartHorizontal },
+  { kind: "vcenter", label: "По центру по вертикали", Icon: AlignCenterHorizontal },
+  { kind: "bottom", label: "По нижнему краю", Icon: AlignEndHorizontal },
+];
+
+type StageBg = "dots" | "checker" | "plain";
+const STAGE_BG: { key: StageBg; label: string }[] = [
+  { key: "dots", label: "Точки" },
+  { key: "checker", label: "Клетка" },
+  { key: "plain", label: "Сплошной" },
+];
 
 function newElement(type: CardElementType, layout: CardLayout): CardElement {
   const id = `${type}_${Date.now().toString(36)}`;
@@ -47,6 +95,22 @@ function newElement(type: CardElementType, layout: CardLayout): CardElement {
 }
 
 type Status = { ok: boolean; message: string } | null;
+type Gesture =
+  | { kind: "move"; id: string; startP: { x: number; y: number }; startEl: CardElement; startBox: Box; targets: Guides }
+  | { kind: "resize"; id: string; handle: Handle; startEl: CardElement; startBox: Box; targets: Guides };
+
+function capture(e: ReactPointerEvent<HTMLCanvasElement>) {
+  try {
+    e.currentTarget.setPointerCapture(e.pointerId);
+  } catch {
+    // Указатель уже отпущен — перетаскивание просто закончится раньше.
+  }
+}
+
+function isTyping(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
+}
 
 export function CardEditor({
   initialLayout,
@@ -59,30 +123,52 @@ export function CardEditor({
   data: CardData;
   avatarUrl: string;
 }) {
-  const [layout, setLayout] = useState<CardLayout>(initialLayout);
+  const history = useHistory<CardLayout>(initialLayout);
+  const layout = history.value;
+  const [savedJson, setSavedJson] = useState(() => JSON.stringify(initialLayout));
+  const dirty = useMemo(() => JSON.stringify(layout) !== savedJson, [layout, savedJson]);
+
   const [selectedId, setSelectedId] = useState<string | null>(initialLayout.elements[0]?.id ?? null);
   const [tab, setTab] = useState<"elements" | "background">("elements");
-  const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<Status>(null);
+  const [snapping, setSnapping] = useState(true);
+  const [stageBg, setStageBg] = useState<StageBg>("dots");
   const [redraw, setRedraw] = useState(0);
+  const [cursor, setCursor] = useState("default");
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const images = useRef(new Map<number, HTMLImageElement>());
   const avatar = useRef<HTMLImageElement | null>(null);
-  const drag = useRef<{ id: string; dx: number; dy: number } | null>(null);
+  const gesture = useRef<Gesture | null>(null);
+  const guides = useRef<Guides>({ xs: [], ys: [] });
 
   const selected = layout.elements.find((e) => e.id === selectedId) ?? null;
-
-  const update = useCallback((fn: (l: CardLayout) => CardLayout) => {
-    setLayout((l) => fn(l));
-    setDirty(true);
-  }, []);
+  const { set: setLayout, undo, redo } = history;
 
   const patchEl = useCallback(
-    (id: string, patch: Record<string, unknown>) =>
-      update((l) => ({ ...l, elements: l.elements.map((e) => (e.id === id ? ({ ...e, ...patch } as CardElement) : e)) })),
-    [update],
+    (id: string, patch: Record<string, unknown>, key = `${id}:${Object.keys(patch).sort().join(",")}`) =>
+      setLayout((l) => ({ ...l, elements: l.elements.map((e) => (e.id === id ? ({ ...e, ...patch } as CardElement) : e)) }), key),
+    [setLayout],
   );
+
+  // Фон рабочей области — личная настройка, хранится в браузере.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("fb-card-stage-bg") as StageBg | null;
+      if (saved && STAGE_BG.some((b) => b.key === saved)) setStageBg(saved);
+    } catch {
+      // Хранилище недоступно — остаётся фон по умолчанию.
+    }
+  }, []);
+  function chooseStageBg(bg: StageBg) {
+    setStageBg(bg);
+    try {
+      localStorage.setItem("fb-card-stage-bg", bg);
+    } catch {
+      // Не сохранилось — не страшно.
+    }
+  }
 
   // Шрифты карточки грузим с нашего сервера, те же файлы использует бот.
   useEffect(() => {
@@ -115,7 +201,16 @@ export function CardEditor({
     }
   }, [assetIds]);
 
-  // Перерисовка превью и рамки выбранного элемента.
+  // Масштаб: сколько пикселей карточки в одном пикселе экрана. Нужен, чтобы ручки
+  // и направляющие были одного размера при любой ширине окна.
+  const pxScale = useCallback(() => {
+    const c = canvasRef.current;
+    if (!c) return 1;
+    const w = c.getBoundingClientRect().width;
+    return w > 0 ? layout.width / w : 1;
+  }, [layout.width]);
+
+  // Перерисовка: карточка, направляющие, рамка и ручки выбранного элемента.
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
@@ -125,16 +220,56 @@ export function CardEditor({
     const loaded = new Map([...images.current].filter(([, img]) => img.complete && img.naturalWidth > 0));
     const av = avatar.current?.complete && avatar.current.naturalWidth > 0 ? avatar.current : null;
     renderCard(ctx, layout, data, { avatar: av, assets: loaded });
+
+    const s = pxScale();
+    ctx.save();
+    ctx.strokeStyle = "#ff3ec9";
+    ctx.lineWidth = s;
+    for (const x of guides.current.xs) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, layout.height);
+      ctx.stroke();
+    }
+    for (const y of guides.current.ys) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(layout.width, y);
+      ctx.stroke();
+    }
+    ctx.restore();
+
     if (selected && selected.visible) {
       const b = elementBounds(ctx, selected, data);
       ctx.save();
       ctx.strokeStyle = "#3b82f6";
-      ctx.lineWidth = 2;
-      ctx.setLineDash([6, 4]);
-      ctx.strokeRect(b.x - 4, b.y - 4, b.w + 8, b.h + 8);
+      ctx.lineWidth = 1.5 * s;
+      ctx.strokeRect(b.x, b.y, b.w, b.h);
+      const hs = 8 * s;
+      ctx.fillStyle = "#ffffff";
+      ctx.lineWidth = 1.5 * s;
+      for (const h of handlesFor(selected)) {
+        const p = handlePoint(b, h);
+        ctx.fillRect(p.x - hs / 2, p.y - hs / 2, hs, hs);
+        ctx.strokeRect(p.x - hs / 2, p.y - hs / 2, hs, hs);
+      }
+      // Подсказка с размером или координатами во время перетаскивания.
+      if (gesture.current) {
+        const label = gesture.current.kind === "resize" ? `${Math.round(b.w)} × ${Math.round(b.h)}` : `${Math.round(selected.x)}, ${Math.round(selected.y)}`;
+        ctx.font = `600 ${Math.round(12 * s)}px "FB Inter", sans-serif`;
+        ctx.textBaseline = "top";
+        ctx.textAlign = "left";
+        const tw = ctx.measureText(label).width;
+        const lx = b.x;
+        const ly = Math.max(0, b.y - 22 * s);
+        ctx.fillStyle = "#3b82f6";
+        ctx.fillRect(lx, ly, tw + 12 * s, 18 * s);
+        ctx.fillStyle = "#ffffff";
+        ctx.fillText(label, lx + 6 * s, ly + 3 * s);
+      }
       ctx.restore();
     }
-  }, [layout, selected, data, redraw]);
+  }, [layout, selected, data, redraw, pxScale]);
 
   useEffect(() => {
     if (!dirty) return;
@@ -142,6 +277,23 @@ export function CardEditor({
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
+
+  // Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y. В полях ввода работает их собственная отмена.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || isTyping(e.target)) return;
+      const k = e.key.toLowerCase();
+      if (k === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if ((k === "z" && e.shiftKey) || k === "y") {
+        e.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, redo]);
 
   function toCard(e: ReactPointerEvent<HTMLCanvasElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -151,41 +303,122 @@ export function CardEditor({
     };
   }
 
-  function onPointerDown(e: ReactPointerEvent<HTMLCanvasElement>) {
-    const ctx = canvasRef.current?.getContext("2d");
-    if (!ctx) return;
-    const p = toCard(e);
-    const hit = [...layout.elements].reverse().find((el) => {
+  function hitElement(ctx: Ctx2D, p: { x: number; y: number }) {
+    return [...layout.elements].reverse().find((el) => {
       if (!el.visible) return false;
       const b = elementBounds(ctx, el, data);
       return p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
     });
-    setSelectedId(hit?.id ?? null);
-    if (hit) {
-      setTab("elements");
-      drag.current = { id: hit.id, dx: p.x - hit.x, dy: p.y - hit.y };
-      e.currentTarget.setPointerCapture(e.pointerId);
+  }
+
+  function onPointerDown(e: ReactPointerEvent<HTMLCanvasElement>) {
+    const ctx = canvasRef.current?.getContext("2d");
+    if (!ctx) return;
+    const p = toCard(e);
+    const tol = 7 * pxScale();
+
+    if (selected?.visible) {
+      const box = elementBounds(ctx, selected, data);
+      const handle = hitHandle(box, handlesFor(selected), p, tol);
+      if (handle) {
+        history.checkpoint();
+        gesture.current = { kind: "resize", id: selected.id, handle, startEl: selected, startBox: box, targets: snapTargets(ctx, layout, data, selected.id) };
+        capture(e);
+        return;
+      }
     }
+
+    const hit = hitElement(ctx, p);
+    setSelectedId(hit?.id ?? null);
+    if (!hit) return;
+    setTab("elements");
+    history.checkpoint();
+    gesture.current = {
+      kind: "move",
+      id: hit.id,
+      startP: p,
+      startEl: hit,
+      startBox: elementBounds(ctx, hit, data),
+      targets: snapTargets(ctx, layout, data, hit.id),
+    };
+    capture(e);
   }
 
   function onPointerMove(e: ReactPointerEvent<HTMLCanvasElement>) {
-    if (!drag.current) return;
     const p = toCard(e);
-    patchEl(drag.current.id, { x: Math.round(p.x - drag.current.dx), y: Math.round(p.y - drag.current.dy) });
+    const g = gesture.current;
+    const tol = 6 * pxScale();
+    const snap = snapping && !e.altKey;
+
+    if (!g) {
+      const ctx = canvasRef.current?.getContext("2d");
+      if (!ctx) return;
+      if (selected?.visible) {
+        const h = hitHandle(elementBounds(ctx, selected, data), handlesFor(selected), p, 7 * pxScale());
+        if (h) return setCursor(CURSOR[h]);
+      }
+      setCursor(hitElement(ctx, p) ? "move" : "default");
+      return;
+    }
+
+    if (g.kind === "move") {
+      let dx = p.x - g.startP.x;
+      let dy = p.y - g.startP.y;
+      if (e.shiftKey) Math.abs(dx) > Math.abs(dy) ? (dy = 0) : (dx = 0);
+      const box = { ...g.startBox, x: g.startBox.x + dx, y: g.startBox.y + dy };
+      if (snap) {
+        const s = snapMove(box, g.targets, tol);
+        dx += s.dx;
+        dy += s.dy;
+        guides.current = s.guides;
+      } else guides.current = { xs: [], ys: [] };
+      history.setSilently((l) => ({
+        ...l,
+        elements: l.elements.map((el) => (el.id === g.id ? ({ ...el, x: Math.round(g.startEl.x + dx), y: Math.round(g.startEl.y + dy) } as CardElement) : el)),
+      }));
+      return;
+    }
+
+    const r = resizeElement({ el: g.startEl, box: g.startBox }, g.handle, p, { keepRatio: e.shiftKey, targets: snap ? g.targets : null, tol });
+    guides.current = r.guides;
+    history.setSilently((l) => ({
+      ...l,
+      elements: l.elements.map((el) => (el.id === g.id ? ({ ...g.startEl, ...r.patch } as CardElement) : el)),
+    }));
+  }
+
+  function endGesture() {
+    if (!gesture.current) return;
+    gesture.current = null;
+    guides.current = { xs: [], ys: [] };
+    history.dropCheckpointIfSame();
+    setRedraw((n) => n + 1);
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLCanvasElement>) {
     if (!selected) return;
+    if (e.key === "Delete" || e.key === "Backspace") {
+      e.preventDefault();
+      removeSelected();
+      return;
+    }
     const step = e.shiftKey ? 10 : 1;
     const moves: Record<string, [number, number]> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
     const m = moves[e.key];
     if (!m) return;
     e.preventDefault();
-    patchEl(selected.id, { x: selected.x + m[0], y: selected.y + m[1] });
+    patchEl(selected.id, { x: selected.x + m[0], y: selected.y + m[1] }, `nudge:${selected.id}`);
+  }
+
+  function align(kind: AlignKind) {
+    const ctx = canvasRef.current?.getContext("2d");
+    if (!ctx || !selected) return;
+    const { dx, dy } = alignOffset(elementBounds(ctx, selected, data), layout, kind);
+    patchEl(selected.id, { x: Math.round(selected.x + dx), y: Math.round(selected.y + dy) }, `align:${Date.now()}`);
   }
 
   function moveLayer(id: string, dir: -1 | 1) {
-    update((l) => {
+    setLayout((l) => {
       const i = l.elements.findIndex((e) => e.id === id);
       const j = i + dir;
       if (i < 0 || j < 0 || j >= l.elements.length) return l;
@@ -201,14 +434,20 @@ export function CardEditor({
       return;
     }
     const el = newElement(type, layout);
-    update((l) => ({ ...l, elements: [...l.elements, el] }));
+    setLayout((l) => ({ ...l, elements: [...l.elements, el] }));
     setSelectedId(el.id);
   }
 
   function duplicate(el: CardElement) {
     const copy = { ...el, id: `${el.type}_${Date.now().toString(36)}`, name: `${el.name} (копия)`.slice(0, 40), x: el.x + 16, y: el.y + 16 };
-    update((l) => ({ ...l, elements: [...l.elements, copy] }));
+    setLayout((l) => ({ ...l, elements: [...l.elements, copy] }));
     setSelectedId(copy.id);
+  }
+
+  function removeSelected() {
+    if (!selected) return;
+    setLayout((l) => ({ ...l, elements: l.elements.filter((e) => e.id !== selected.id) }));
+    setSelectedId(null);
   }
 
   async function upload(file: File | undefined, apply: (id: number) => void) {
@@ -217,63 +456,103 @@ export function CardEditor({
     const fd = new FormData();
     fd.set("file", file);
     const res = await uploadCardAsset(fd);
-    if (res?.ok && res.asset) {
+    if (res.ok && res.asset) {
       apply(res.asset.id);
       setStatus({ ok: true, message: "Картинка загружена. Не забудь сохранить карточку." });
     } else {
-      setStatus({ ok: false, message: res?.message ?? "Не получилось загрузить картинку" });
+      setStatus({ ok: false, message: res.message });
     }
   }
 
   async function save() {
     const parsed = cardLayoutSchema.safeParse(layout);
     if (!parsed.success) {
-      const issue = parsed.error.issues[0];
-      setStatus({ ok: false, message: `Проверь поля: ${issue?.message ?? "ошибка в шаблоне"}` });
+      setStatus({ ok: false, message: `Проверь поля: ${parsed.error.issues[0]?.message ?? "ошибка в шаблоне"}` });
       return;
     }
     setSaving(true);
     const res = await saveCardLayout(JSON.stringify(parsed.data));
     setSaving(false);
     setStatus(res ? { ok: res.ok, message: res.message } : null);
-    if (res?.ok) setDirty(false);
+    if (res?.ok) setSavedJson(JSON.stringify(parsed.data));
   }
+
+  const setBg = (patch: Partial<CardLayout["background"]>, key?: string) =>
+    setLayout((l) => ({ ...l, background: { ...l.background, ...patch } }), key);
 
   return (
     <div className="card-editor">
       <div className="card-stage">
-        <div className="card-canvas-wrap">
+        <div className="editor-toolbar" role="toolbar" aria-label="Инструменты редактора">
+          <div className="tool-group">
+            <button type="button" className="tool-btn" onClick={undo} disabled={!history.canUndo} title="Отменить (Ctrl+Z)" aria-label="Отменить">
+              <Undo2 size={16} />
+            </button>
+            <button type="button" className="tool-btn" onClick={redo} disabled={!history.canRedo} title="Повторить (Ctrl+Shift+Z)" aria-label="Повторить">
+              <Redo2 size={16} />
+            </button>
+          </div>
+          <div className="tool-group">
+            {ALIGN_BUTTONS.map(({ kind, label, Icon }) => (
+              <button key={kind} type="button" className="tool-btn" onClick={() => align(kind)} disabled={!selected} title={label} aria-label={label}>
+                <Icon size={16} />
+              </button>
+            ))}
+          </div>
+          <div className="tool-group">
+            <button
+              type="button"
+              className={snapping ? "tool-btn on" : "tool-btn"}
+              onClick={() => setSnapping((v) => !v)}
+              aria-pressed={snapping}
+              title="Прилипание к краям, центру и другим элементам. Alt — временно отключить"
+              aria-label="Прилипание"
+            >
+              <Magnet size={16} />
+            </button>
+          </div>
+          <div className="tool-group tool-seg" aria-label="Фон рабочей области">
+            {STAGE_BG.map((b) => (
+              <button key={b.key} type="button" className={stageBg === b.key ? "tool-text on" : "tool-text"} onClick={() => chooseStageBg(b.key)} aria-pressed={stageBg === b.key}>
+                {b.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className={`card-canvas-wrap stage-${stageBg}`}>
           <canvas
             ref={canvasRef}
             className="card-canvas"
+            style={{ cursor }}
             tabIndex={0}
-            aria-label="Превью карточки. Нажми на элемент, чтобы выбрать, и перетащи, чтобы переместить. Стрелки сдвигают выбранный элемент."
+            aria-label="Превью карточки. Нажми на элемент, чтобы выбрать, тяни за элемент или за белые ручки. Стрелки сдвигают, Delete удаляет."
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
-            onPointerUp={() => (drag.current = null)}
-            onPointerCancel={() => (drag.current = null)}
+            onPointerUp={endGesture}
+            onPointerCancel={endGesture}
             onKeyDown={onKeyDown}
           />
         </div>
+
         <div className="card-toolbar">
           <span className="muted" style={{ fontSize: 12.5 }}>
-            {layout.width}×{layout.height} · перетаскивай элементы мышью, стрелки сдвигают на 1 px, Shift+стрелки на 10 px
+            {layout.width}×{layout.height} · Shift — по прямой или с сохранением пропорций · Alt — без прилипания
           </span>
           <span style={{ display: "flex", gap: 8 }}>
             <button
               type="button"
               className="btn"
               onClick={() => {
-                if (window.confirm("Вернуть стандартную карточку? Несохранённые изменения пропадут.")) {
+                if (window.confirm("Вернуть стандартную карточку? Это можно будет отменить.")) {
                   setLayout(defaultLayout);
                   setSelectedId(defaultLayout.elements[0]?.id ?? null);
-                  setDirty(true);
                 }
               }}
             >
               Стандартная
             </button>
-            <button type="button" className="btn primary" onClick={save} disabled={saving}>
+            <button type="button" className="btn primary" onClick={save} disabled={saving || !dirty}>
               {saving ? "Сохраняю…" : dirty ? "Сохранить" : "Сохранено"}
             </button>
           </span>
@@ -306,7 +585,7 @@ export function CardEditor({
                       <span className={el.visible ? "" : "muted"}>{el.name}</span>
                       <span className="muted" style={{ fontSize: 11.5 }}>{TYPE_LABEL[el.type]}</span>
                     </button>
-                    <button type="button" className="icon-btn" title={el.visible ? "Скрыть" : "Показать"} aria-label={el.visible ? "Скрыть" : "Показать"} onClick={() => patchEl(el.id, { visible: !el.visible })}>
+                    <button type="button" className="icon-btn" title={el.visible ? "Скрыть" : "Показать"} aria-label={el.visible ? "Скрыть" : "Показать"} onClick={() => patchEl(el.id, { visible: !el.visible }, `vis:${Date.now()}`)}>
                       {el.visible ? <Eye size={15} /> : <EyeOff size={15} />}
                     </button>
                     <button type="button" className="icon-btn" title="Выше" aria-label="Выше" disabled={i === layout.elements.length - 1} onClick={() => moveLayer(el.id, 1)}>
@@ -335,16 +614,7 @@ export function CardEditor({
                     <button type="button" className="icon-btn" title="Дублировать" aria-label="Дублировать" onClick={() => duplicate(selected)}>
                       <Copy size={15} />
                     </button>
-                    <button
-                      type="button"
-                      className="icon-btn danger"
-                      title="Удалить"
-                      aria-label="Удалить"
-                      onClick={() => {
-                        update((l) => ({ ...l, elements: l.elements.filter((e) => e.id !== selected.id) }));
-                        setSelectedId(null);
-                      }}
-                    >
+                    <button type="button" className="icon-btn danger" title="Удалить (Delete)" aria-label="Удалить" onClick={removeSelected}>
                       <Trash2 size={15} />
                     </button>
                   </span>
@@ -362,11 +632,11 @@ export function CardEditor({
         {tab === "background" && (
           <div className="props">
             <Row>
-              <NumField label="Ширина" value={layout.width} min={300} max={1600} onChange={(v) => update((l) => ({ ...l, width: v }))} />
-              <NumField label="Высота" value={layout.height} min={150} max={1000} onChange={(v) => update((l) => ({ ...l, height: v }))} />
+              <NumField label="Ширина" value={layout.width} min={300} max={1600} onChange={(v) => setLayout((l) => ({ ...l, width: v }), "width")} />
+              <NumField label="Высота" value={layout.height} min={150} max={1000} onChange={(v) => setLayout((l) => ({ ...l, height: v }), "height")} />
             </Row>
-            <NumField label="Скругление углов" value={layout.radius} min={0} max={100} onChange={(v) => update((l) => ({ ...l, radius: v }))} />
-            <ColorField label="Цвет фона" value={layout.background.color} onChange={(v) => update((l) => ({ ...l, background: { ...l.background, color: v } }))} />
+            <NumField label="Скругление углов" value={layout.radius} min={0} max={100} onChange={(v) => setLayout((l) => ({ ...l, radius: v }), "radius")} />
+            <ColorField label="Цвет фона" value={layout.background.color} onChange={(v) => setBg({ color: v }, "bg-color")} />
             <div className="stack">
               <span className="prop-label">Картинка фона</span>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -377,194 +647,30 @@ export function CardEditor({
                     accept="image/png,image/jpeg,image/webp"
                     hidden
                     onChange={(e) => {
-                      void upload(e.target.files?.[0], (id) => update((l) => ({ ...l, background: { ...l.background, imageAssetId: id } })));
+                      void upload(e.target.files?.[0], (id) => setBg({ imageAssetId: id }));
                       e.target.value = "";
                     }}
                   />
                 </label>
                 {layout.background.imageAssetId && (
-                  <button type="button" className="btn small danger" onClick={() => update((l) => ({ ...l, background: { ...l.background, imageAssetId: null } }))}>
+                  <button type="button" className="btn small danger" onClick={() => setBg({ imageAssetId: null })}>
                     Убрать
                   </button>
                 )}
               </div>
               <span className="muted" style={{ fontSize: 12 }}>PNG, JPEG или WebP до 5 МБ. Лучше {layout.width}×{layout.height} или крупнее.</span>
             </div>
-            <ColorField label="Затемнение поверх фона" value={layout.background.overlayColor} onChange={(v) => update((l) => ({ ...l, background: { ...l.background, overlayColor: v } }))} />
+            <ColorField label="Затемнение поверх фона" value={layout.background.overlayColor} onChange={(v) => setBg({ overlayColor: v }, "bg-overlay")} />
             <NumField
               label="Сила затемнения, %"
               value={Math.round(layout.background.overlayOpacity * 100)}
               min={0}
               max={100}
-              onChange={(v) => update((l) => ({ ...l, background: { ...l.background, overlayOpacity: v / 100 } }))}
+              onChange={(v) => setBg({ overlayOpacity: v / 100 }, "bg-opacity")}
             />
           </div>
         )}
       </aside>
     </div>
-  );
-}
-
-function ElementProps({
-  el,
-  patch,
-  upload,
-}: {
-  el: CardElement;
-  patch: (p: Record<string, unknown>) => void;
-  upload: (file: File | undefined, apply: (id: number) => void) => Promise<void>;
-}) {
-  const fontOptions = CARD_FONT_KEYS.map((k) => ({ value: k, label: CARD_FONTS[k].label }));
-
-  return (
-    <>
-      <label className="stack">
-        <span className="prop-label">Название слоя</span>
-        <input type="text" value={el.name} maxLength={40} onChange={(e) => patch({ name: e.target.value })} />
-      </label>
-      <Row>
-        <NumField label="X" value={el.x} min={-2000} max={4000} onChange={(v) => patch({ x: v })} />
-        <NumField label="Y" value={el.y} min={-2000} max={4000} onChange={(v) => patch({ y: v })} />
-      </Row>
-      <NumField label="Непрозрачность, %" value={Math.round(el.opacity * 100)} min={0} max={100} onChange={(v) => patch({ opacity: v / 100 })} />
-
-      {el.type === "text" && (
-        <>
-          <label className="stack">
-            <span className="prop-label">Текст</span>
-            <textarea rows={2} value={el.text} maxLength={200} onChange={(e) => patch({ text: e.target.value })} />
-          </label>
-          <div className="placeholders">
-            {CARD_PLACEHOLDERS.map((p) => (
-              <button key={p.key} type="button" className="chip" title={p.label} onClick={() => patch({ text: `${el.text}${p.key}` })}>
-                {p.key}
-              </button>
-            ))}
-          </div>
-          <Row>
-            <SelectField label="Шрифт" value={el.font} options={fontOptions} onChange={(v) => patch({ font: v, weight: CARD_FONTS[v as keyof typeof CARD_FONTS].files[el.weight] ? el.weight : 400 })} />
-            <SelectField
-              label="Толщина"
-              value={String(el.weight)}
-              options={([400, 600, 700] as const).filter((w) => CARD_FONTS[el.font].files[w]).map((w) => ({ value: String(w), label: w === 400 ? "Обычный" : w === 600 ? "Полужирный" : "Жирный" }))}
-              onChange={(v) => patch({ weight: Number(v) })}
-            />
-          </Row>
-          <Row>
-            <NumField label="Размер" value={el.size} min={8} max={200} onChange={(v) => patch({ size: v })} />
-            <SelectField
-              label="Выравнивание"
-              value={el.align}
-              options={[
-                { value: "left", label: "Слева" },
-                { value: "center", label: "По центру" },
-                { value: "right", label: "Справа" },
-              ]}
-              onChange={(v) => patch({ align: v })}
-            />
-          </Row>
-          <ColorField label="Цвет" value={el.color} onChange={(v) => patch({ color: v })} />
-          <NumField label="Макс. ширина (0 — без ограничения)" value={el.maxWidth} min={0} max={4000} onChange={(v) => patch({ maxWidth: v })} />
-          <label className="check-row">
-            <input type="checkbox" checked={el.uppercase} onChange={(e) => patch({ uppercase: e.target.checked })} /> Заглавными буквами
-          </label>
-          <label className="check-row">
-            <input type="checkbox" checked={el.shadow} onChange={(e) => patch({ shadow: e.target.checked })} /> Тень
-          </label>
-        </>
-      )}
-
-      {el.type === "rect" && (
-        <>
-          <Row>
-            <NumField label="Ширина" value={el.width} min={1} max={4000} onChange={(v) => patch({ width: v })} />
-            <NumField label="Высота" value={el.height} min={1} max={4000} onChange={(v) => patch({ height: v })} />
-          </Row>
-          <NumField label="Скругление" value={el.radius} min={0} max={500} onChange={(v) => patch({ radius: v })} />
-          <ColorField label="Цвет" value={el.color} onChange={(v) => patch({ color: v })} />
-        </>
-      )}
-
-      {el.type === "image" && (
-        <>
-          <div className="stack">
-            <span className="prop-label">Картинка</span>
-            <label className="btn small" style={{ alignSelf: "flex-start" }}>
-              {el.assetId ? "Заменить" : "Загрузить"}
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                hidden
-                onChange={(e) => {
-                  void upload(e.target.files?.[0], (id) => patch({ assetId: id }));
-                  e.target.value = "";
-                }}
-              />
-            </label>
-          </div>
-          <Row>
-            <NumField label="Ширина" value={el.width} min={1} max={4000} onChange={(v) => patch({ width: v })} />
-            <NumField label="Высота" value={el.height} min={1} max={4000} onChange={(v) => patch({ height: v })} />
-          </Row>
-          <Row>
-            <NumField label="Скругление" value={el.radius} min={0} max={500} onChange={(v) => patch({ radius: v })} />
-            <SelectField
-              label="Вписать"
-              value={el.fit}
-              options={[
-                { value: "contain", label: "Целиком" },
-                { value: "cover", label: "Заполнить" },
-              ]}
-              onChange={(v) => patch({ fit: v })}
-            />
-          </Row>
-        </>
-      )}
-
-      {el.type === "avatar" && (
-        <>
-          <NumField label="Размер" value={el.size} min={1} max={800} onChange={(v) => patch({ size: v })} />
-          <SelectField
-            label="Форма"
-            value={el.shape}
-            options={[
-              { value: "circle", label: "Круг" },
-              { value: "rounded", label: "Скруглённый квадрат" },
-              { value: "square", label: "Квадрат" },
-            ]}
-            onChange={(v) => patch({ shape: v })}
-          />
-          <NumField label="Толщина обводки" value={el.borderWidth} min={0} max={40} onChange={(v) => patch({ borderWidth: v })} />
-          <ColorField label="Цвет обводки" value={el.borderColor} onChange={(v) => patch({ borderColor: v })} />
-        </>
-      )}
-
-      {el.type === "progress" && (
-        <>
-          <Row>
-            <NumField label="Ширина" value={el.width} min={1} max={4000} onChange={(v) => patch({ width: v })} />
-            <NumField label="Высота" value={el.height} min={1} max={200} onChange={(v) => patch({ height: v })} />
-          </Row>
-          <NumField label="Скругление" value={el.radius} min={0} max={100} onChange={(v) => patch({ radius: v })} />
-          <ColorField label="Цвет дорожки" value={el.trackColor} onChange={(v) => patch({ trackColor: v })} />
-          <ColorField label="Цвет заполнения" value={el.fillColor} onChange={(v) => patch({ fillColor: v })} />
-        </>
-      )}
-
-      {el.type === "badges" && (
-        <>
-          <Row>
-            <NumField label="Размер текста" value={el.size} min={8} max={64} onChange={(v) => patch({ size: v })} />
-            <NumField label="Сколько показывать" value={el.maxCount} min={1} max={12} onChange={(v) => patch({ maxCount: v })} />
-          </Row>
-          <Row>
-            <SelectField label="Шрифт" value={el.font} options={fontOptions} onChange={(v) => patch({ font: v })} />
-            <NumField label="Отступ" value={el.gap} min={0} max={60} onChange={(v) => patch({ gap: v })} />
-          </Row>
-          <ColorField label="Фон бейджа" value={el.color} onChange={(v) => patch({ color: v })} />
-          <ColorField label="Цвет текста" value={el.textColor} onChange={(v) => patch({ textColor: v })} />
-        </>
-      )}
-    </>
   );
 }
