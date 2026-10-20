@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@flamebot/core";
+import { ModalTrigger } from "@/components/ui/Modal";
 import { requirePage } from "@/lib/auth";
 import { modules } from "@/modules";
 import { PageHead } from "@/components/Fields";
@@ -86,9 +87,14 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
                   </td>
                   <td>
                     {r.details ? (
-                      <code style={{ display: "inline-block", maxWidth: 320, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "middle" }}>
-                        {JSON.stringify(r.details)}
-                      </code>
+                      <ModalTrigger
+                        label="Подробнее"
+                        buttonClass="btn small"
+                        title={ACTIONS[r.action] ?? r.action}
+                        description={`${r.actorName} · ${r.createdAt.toLocaleString("ru-RU")}${r.target ? ` · ${r.target}` : ""}`}
+                      >
+                        <pre className="json-view">{JSON.stringify(r.details, null, 2)}</pre>
+                      </ModalTrigger>
                     ) : (
                       <span className="muted">—</span>
                     )}

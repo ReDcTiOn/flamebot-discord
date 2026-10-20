@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { prisma } from "@flamebot/core";
 import { PanelNav } from "@/components/PanelNav";
+import { ToastProvider } from "@/components/ui/Toast";
 import { requirePage } from "@/lib/auth";
 import { avatarUrl } from "@/lib/discord";
 import { logout } from "./actions";
@@ -16,14 +17,16 @@ export default async function PanelLayout({ children }: { children: ReactNode })
   const online = Object.fromEntries(statuses.map((s) => [s.botKey, Date.now() - s.heartbeatAt.getTime() < ONLINE_MS]));
 
   return (
-    <div className="shell">
-      <PanelNav
-        user={{ username: user.username, avatar: avatarUrl(user.id, user.avatarHash), full: user.level === "full" }}
-        guildName={guild?.name ?? null}
-        online={online}
-        logout={logout}
-      />
-      <main className="main">{children}</main>
-    </div>
+    <ToastProvider>
+      <div className="shell">
+        <PanelNav
+          user={{ username: user.username, avatar: avatarUrl(user.id, user.avatarHash), full: user.level === "full" }}
+          guildName={guild?.name ?? null}
+          online={online}
+          logout={logout}
+        />
+        <main className="main">{children}</main>
+      </div>
+    </ToastProvider>
   );
 }

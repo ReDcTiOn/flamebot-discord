@@ -1,6 +1,8 @@
-import { getRatingSettings, prisma } from "@flamebot/core";
+import { Plus } from "lucide-react";
+import { getRatingSettings, prisma, type Rank } from "@flamebot/core";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
-import { FieldRow, NumberInput, PageHead, RoleSelect, Section, Switch, Tabs, pickTab } from "@/components/Fields";
+import { EmptyState, FieldRow, NumberInput, PageHead, RoleSelect, Section, Switch, Tabs, pickTab } from "@/components/Fields";
+import { ModalCancel, ModalTrigger } from "@/components/ui/Modal";
 import { requirePage } from "@/lib/auth";
 import { listRoles } from "@/lib/guild";
 import { createRank, deleteRank, saveXpSettings, updateRank } from "../actions";
@@ -12,7 +14,38 @@ const TABS = [
   { key: "ranks", label: "Ранги" },
 ] as const;
 
-const RANK_GRID = { display: "grid", gridTemplateColumns: "1.3fr 64px 110px 1.6fr 96px auto", gap: 8, alignItems: "center" } as const;
+type Roles = Awaited<ReturnType<typeof listRoles>>;
+
+function RankFields({ roles, rank }: { roles: Roles; rank?: Rank }) {
+  return (
+    <div className="form-grid">
+      <div className="grid" style={{ gridTemplateColumns: "1fr 96px" }}>
+        <label className="stack">
+          <span>Название</span>
+          <input type="text" name="name" defaultValue={rank?.name} placeholder="Бункер" maxLength={50} required className="wide" />
+        </label>
+        <label className="stack">
+          <span>Эмодзи</span>
+          <input type="text" name="emoji" defaultValue={rank?.emoji ?? ""} placeholder="☢️" maxLength={32} className="wide" />
+        </label>
+      </div>
+      <div className="grid grid-2">
+        <label className="stack">
+          <span>Порог опыта</span>
+          <input type="number" name="minXp" defaultValue={rank?.minXp} placeholder="25000" min={0} required className="wide" />
+        </label>
+        <label className="stack">
+          <span>Награда скрапом за ранг</span>
+          <input type="number" name="scrapReward" defaultValue={rank?.scrapReward ?? 0} min={0} required className="wide" />
+        </label>
+      </div>
+      <label className="stack">
+        <span>Роль Discord, которую выдаёт бот</span>
+        <RoleSelect name="roleId" roles={roles} defaultValue={rank?.roleId ?? null} />
+      </label>
+    </div>
+  );
+}
 
 export default async function XpPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   await requirePage();
@@ -23,6 +56,7 @@ export default async function XpPage({ searchParams }: { searchParams: Promise<{
     listRoles(),
   ]);
 
+  const roleName = new Map(roles.map((r) => [r.id, r.name]));
   const avgGain = (s.xpMin + s.xpMax) / 2;
   const top = ranks.at(-1);
   const messagesToTop = top && avgGain > 0 ? Math.ceil(top.minXp / avgGain) : null;
@@ -84,46 +118,70 @@ export default async function XpPage({ searchParams }: { searchParams: Promise<{
                 ? `До «${top!.name}» нужно около ${messagesToTop.toLocaleString("ru-RU")} сообщений, это минимум ${hoursToTop} ч активного общения.`
                 : "Добавь ранги, чтобы игроки росли."
             }
+            action={
+              <ModalTrigger
+                label={
+                  <>
+                    <Plus size={16} aria-hidden="true" /> Добавить ранг
+                  </>
+                }
+                buttonClass="btn primary"
+                title="Новый ранг"
+                description="Роли с правами модерации выбрать нельзя: бот их не выдаёт."
+              >
+                <ActionForm action={createRank} resetOnSuccess>
+                  <RankFields roles={roles} />
+                  <div className="modal-actions">
+                    <ModalCancel />
+                    <SubmitButton>Добавить ранг</SubmitButton>
+                  </div>
+                </ActionForm>
+              </ModalTrigger>
+            }
           >
-            <div style={{ ...RANK_GRID, fontSize: 12, color: "var(--text-muted)", padding: "0 15px 8px 15px" }}>
-              <span>Название</span><span>Эмодзи</span><span>Порог опыта</span><span>Роль Discord</span><span>Награда</span><span />
-            </div>
-            <div className="tiles">
-              {ranks.map((r) => (
-                <div key={r.id} className="setting" style={{ alignItems: "flex-start" }}>
-                  <ActionForm action={updateRank} className="rank-form">
-                    <input type="hidden" name="id" value={r.id} />
-                    <div style={RANK_GRID}>
-                      <input type="text" name="name" defaultValue={r.name} maxLength={50} required aria-label="Название" />
-                      <input type="text" name="emoji" defaultValue={r.emoji ?? ""} maxLength={32} aria-label="Эмодзи" />
-                      <input type="number" name="minXp" defaultValue={r.minXp} min={0} required aria-label="Порог опыта" />
-                      <RoleSelect name="roleId" roles={roles} defaultValue={r.roleId} />
-                      <input type="number" name="scrapReward" defaultValue={r.scrapReward} min={0} required aria-label="Награда скрапом" />
-                      <SubmitButton variant="secondary">Сохранить</SubmitButton>
+            {ranks.length === 0 ? (
+              <EmptyState icon="trending" title="Рангов пока нет" hint="Добавь первый ранг с порогом 0 опыта." />
+            ) : (
+              <div className="tiles">
+                {ranks.map((r, i) => (
+                  <div key={r.id} className="setting">
+                    <div className="setting-icon rank-emoji" aria-hidden="true">
+                      {r.emoji || i + 1}
                     </div>
-                  </ActionForm>
-                  <ActionForm action={deleteRank} confirm={`Удалить ранг «${r.name}»?`}>
-                    <input type="hidden" name="id" value={r.id} />
-                    <SubmitButton variant="danger">Удалить</SubmitButton>
-                  </ActionForm>
-                </div>
-              ))}
-            </div>
-          </Section>
-
-          <Section title="Новый ранг" hint="Роли с правами модерации выбрать нельзя: бот их не выдаёт.">
-            <div className="setting">
-              <ActionForm action={createRank} resetOnSuccess className="rank-form">
-                <div style={RANK_GRID}>
-                  <input type="text" name="name" placeholder="Бункер" maxLength={50} required aria-label="Название" />
-                  <input type="text" name="emoji" placeholder="☢️" maxLength={32} aria-label="Эмодзи" />
-                  <input type="number" name="minXp" placeholder="25000" min={0} required aria-label="Порог опыта" />
-                  <RoleSelect name="roleId" roles={roles} defaultValue={null} />
-                  <input type="number" name="scrapReward" defaultValue={0} min={0} required aria-label="Награда скрапом" />
-                  <SubmitButton>Добавить</SubmitButton>
-                </div>
-              </ActionForm>
-            </div>
+                    <div className="setting-body">
+                      <div className="setting-title">{r.name}</div>
+                      <div className="setting-hint">
+                        от {r.minXp.toLocaleString("ru-RU")} опыта
+                        {r.roleId ? ` · роль @${roleName.get(r.roleId) ?? "удалена"}` : " · без роли"}
+                        {r.scrapReward > 0 ? ` · награда ${r.scrapReward.toLocaleString("ru-RU")} скрапа` : ""}
+                      </div>
+                    </div>
+                    <div className="row-actions">
+                      <ModalTrigger label="Изменить" buttonClass="btn small" title={`Ранг «${r.name}»`} description="Роли участников пересчитаются в фоне после сохранения.">
+                        <ActionForm action={updateRank}>
+                          <input type="hidden" name="id" value={r.id} />
+                          <RankFields roles={roles} rank={r} />
+                          <div className="modal-actions">
+                            <ModalCancel />
+                            <SubmitButton>Сохранить</SubmitButton>
+                          </div>
+                        </ActionForm>
+                        <div className="danger-zone">
+                          <h3>Удалить ранг</h3>
+                          <p className="secondary" style={{ fontSize: 13, marginBottom: 10 }}>
+                            Игроки этого ранга перейдут на предыдущий, роль ранга с них снимется.
+                          </p>
+                          <ActionForm action={deleteRank} confirm={`Удалить ранг «${r.name}»?`} confirmLabel="Удалить" danger>
+                            <input type="hidden" name="id" value={r.id} />
+                            <SubmitButton variant="danger">Удалить ранг</SubmitButton>
+                          </ActionForm>
+                        </div>
+                      </ModalTrigger>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </Section>
         </>
       )}

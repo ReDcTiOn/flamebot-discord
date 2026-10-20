@@ -365,3 +365,61 @@ label.btn { cursor: pointer; }
 .xp-channels:has(input[value="all"]:checked) .check-list,
 .xp-channels:has(input[value="all"]:checked) .btn { opacity: 0.4; pointer-events: none; }
 @media (max-width: 960px) { .choice-row { grid-template-columns: 1fr; } }
+
+/* ---------- Всплывающие окна ---------- */
+.modal {
+  padding: 0; border: 1px solid var(--border-strong); border-radius: 14px;
+  background: var(--sidebar); color: var(--text); width: calc(100vw - 32px); max-height: calc(100vh - 48px);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+}
+.modal-sm { max-width: 420px; }
+.modal-md { max-width: 560px; }
+.modal-lg { max-width: 760px; }
+.modal::backdrop { background: rgba(0, 0, 0, 0.62); }
+.modal[open] { animation: modal-in 0.16s ease-out; }
+.modal[open]::backdrop { animation: fade-in 0.16s ease-out; }
+@keyframes modal-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .modal[open], .modal[open]::backdrop { animation: none; } }
+.modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px 20px 0; }
+.modal-head h2 { font-size: 18px; }
+.modal-desc { color: var(--text-secondary); font-size: 13px; margin-top: 4px; }
+.modal-body { padding: 16px 20px 20px; overflow-y: auto; max-height: calc(100vh - 140px); }
+.modal-body .grid { gap: 12px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
+.modal-actions .spacer { margin-right: auto; }
+.btn.danger-solid { background: #c93a32; border-color: #c93a32; color: #fff; }
+.btn.danger-solid:hover { background: #b0312a; }
+.danger-zone { margin-top: 18px; padding: 14px; border: 1px solid #4a2220; border-radius: var(--radius-lg); background: rgba(242, 85, 75, 0.05); }
+.danger-zone h3 { font-size: 14px; color: var(--danger); margin-bottom: 4px; }
+.stat-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
+.stat-row .metric { padding: 10px 12px; }
+.stat-row .metric-value { font-size: 18px; }
+
+/* ---------- Уведомления ---------- */
+.toasts { position: fixed; right: 20px; bottom: 20px; z-index: 50; display: flex; flex-direction: column; gap: 8px; max-width: min(420px, calc(100vw - 40px)); }
+.toast {
+  display: flex; align-items: flex-start; gap: 10px; padding: 12px 12px 12px 14px;
+  background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); font-size: 13.5px; animation: modal-in 0.16s ease-out;
+}
+.toast > span { flex: 1; padding-top: 1px; }
+.toast.ok svg:first-child { color: var(--success); flex-shrink: 0; }
+.toast.error svg:first-child { color: var(--danger); flex-shrink: 0; }
+.toast-close { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 2px; border-radius: 4px; }
+.toast-close:hover { color: var(--text); }
+
+/* Строка списка с кнопками справа */
+.row-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+
+/* Панель над списком: поиск слева, фильтры справа */
+.toolbar-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+.toolbar-row input[type="search"] { flex: 1; min-width: 220px; max-width: 360px; }
+.toolbar-spacer { flex: 1; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.form-grid { display: flex; flex-direction: column; gap: 14px; }
+.type-picker { border: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.type-picker legend { margin-bottom: 8px; }
+@media (max-width: 700px) { .type-picker { grid-template-columns: 1fr; } }
+.setting-icon.rank-emoji { font-size: 18px; color: var(--text); }
+.json-view { margin: 0; padding: 12px 14px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); font-family: var(--mono); font-size: 12.5px; line-height: 1.55; color: var(--text-secondary); white-space: pre-wrap; word-break: break-word; max-height: 60vh; overflow: auto; }

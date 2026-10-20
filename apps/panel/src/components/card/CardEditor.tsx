@@ -32,6 +32,8 @@ import {
   type Ctx2D,
 } from "@flamebot/core/card";
 import { saveCardLayout, uploadCardAsset } from "@/app/(panel)/rating/actions";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { useToast } from "@/components/ui/Toast";
 import { ColorField, NumField, Row, SelectField } from "./controls";
 import { ElementProps } from "./ElementProps";
 import {
@@ -136,6 +138,8 @@ export function CardEditor({
   const [stageBg, setStageBg] = useState<StageBg>("dots");
   const [redraw, setRedraw] = useState(0);
   const [cursor, setCursor] = useState("default");
+  const [askReset, setAskReset] = useState(false);
+  const toast = useToast();
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const images = useRef(new Map<number, HTMLImageElement>());
@@ -458,7 +462,8 @@ export function CardEditor({
     const res = await uploadCardAsset(fd);
     if (res.ok && res.asset) {
       apply(res.asset.id);
-      setStatus({ ok: true, message: "Картинка загружена. Не забудь сохранить карточку." });
+      setStatus(null);
+      toast.show(true, "Картинка загружена. Не забудь сохранить карточку.");
     } else {
       setStatus({ ok: false, message: res.message });
     }
@@ -473,8 +478,13 @@ export function CardEditor({
     setSaving(true);
     const res = await saveCardLayout(JSON.stringify(parsed.data));
     setSaving(false);
-    setStatus(res ? { ok: res.ok, message: res.message } : null);
-    if (res?.ok) setSavedJson(JSON.stringify(parsed.data));
+    if (res?.ok) {
+      setSavedJson(JSON.stringify(parsed.data));
+      setStatus(null);
+      toast.show(true, res.message);
+    } else {
+      setStatus({ ok: false, message: res?.message ?? "Не получилось сохранить" });
+    }
   }
 
   const setBg = (patch: Partial<CardLayout["background"]>, key?: string) =>
@@ -540,16 +550,7 @@ export function CardEditor({
             {layout.width}×{layout.height} · Shift — по прямой или с сохранением пропорций · Alt — без прилипания
           </span>
           <span style={{ display: "flex", gap: 8 }}>
-            <button
-              type="button"
-              className="btn"
-              onClick={() => {
-                if (window.confirm("Вернуть стандартную карточку? Это можно будет отменить.")) {
-                  setLayout(defaultLayout);
-                  setSelectedId(defaultLayout.elements[0]?.id ?? null);
-                }
-              }}
-            >
+            <button type="button" className="btn" onClick={() => setAskReset(true)}>
               Стандартная
             </button>
             <button type="button" className="btn primary" onClick={save} disabled={saving || !dirty}>
@@ -562,6 +563,18 @@ export function CardEditor({
             {status.message}
           </p>
         )}
+        <ConfirmDialog
+          open={askReset}
+          title="Вернуть стандартную карточку?"
+          message="Все элементы заменятся стандартными. Это можно отменить стрелкой «Отменить» до сохранения."
+          confirmLabel="Вернуть"
+          onCancel={() => setAskReset(false)}
+          onConfirm={() => {
+            setAskReset(false);
+            setLayout(defaultLayout);
+            setSelectedId(defaultLayout.elements[0]?.id ?? null);
+          }}
+        />
       </div>
 
       <aside className="card-inspector">
