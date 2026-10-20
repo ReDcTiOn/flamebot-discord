@@ -1,4 +1,5 @@
 import {
+  Activity,
   Clock,
   Coins,
   Hash,
@@ -15,6 +16,7 @@ import {
   Repeat,
   Ruler,
   Search,
+  Server,
   Shield,
   Store,
   ThumbsUp,
@@ -46,6 +48,8 @@ const ICONS: Record<IconName, LucideIcon> = {
   package: Package,
   search: Search,
   image: ImageIcon,
+  server: Server,
+  activity: Activity,
 };
 
 export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {

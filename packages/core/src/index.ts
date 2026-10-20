@@ -21,6 +21,10 @@ export type {
   CustomRoleRequest,
   CustomRoleRequestStatus,
   BotEvent,
+  OnlineServer,
+  OnlineServerStatus,
+  OnlineSettings,
+  OnlineState,
   EventLevel,
   CardAsset,
   AuditLog,
@@ -29,3 +33,5 @@ export type {
 } from "@prisma/client";
 export * from "./cardAssets.js";
 export * from "./events.js";
+export * from "./secrets.js";
+export * from "./online.js";

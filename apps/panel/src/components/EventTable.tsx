@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { EVENT_GROUPS, type BotEvent } from "@flamebot/core";
+import { EVENT_GROUPS_BY_BOT, type BotEvent } from "@flamebot/core";
 import { ModalTrigger } from "@/components/ui/Modal";
 
 export const LEVEL_LABEL = { INFO: "Событие", WARN: "Предупреждение", ERROR: "Ошибка" } as const;
 const LEVEL_CHIP = { INFO: "chip", WARN: "chip warn", ERROR: "chip danger" } as const;
 
-export function eventGroup(type: string): string {
-  return EVENT_GROUPS[type.split(".")[0] ?? ""] ?? "Другое";
+export function eventGroup(type: string, botKey = "rating"): string {
+  return EVENT_GROUPS_BY_BOT[botKey]?.[type.split(".")[0] ?? ""] ?? "Другое";
 }
 
 // Строка истории: время, важность, раздел, текст и ссылка на игрока.

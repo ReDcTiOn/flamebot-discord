@@ -222,7 +222,67 @@ model DailyStat {
   scrapSpent Int      @default(0)
 }
 
+// ===================== Бот онлайна серверов (модуль "online") =====================
+
+// Единственная строка с id = 1.
+model OnlineSettings {
+  id                Int      @id @default(1)
+  pollIntervalMs    Int      @default(5000)
+  connectTimeoutMs  Int      @default(15000)
+  responseTimeoutMs Int      @default(60000)
+  offlineText       String   @default("Сервер выключен")
+  startingText      String   @default("Сервер запускается")
+  onlineText        String   @default("Онлайн: {players}/{max} игроков")
+  queueText         String   @default("Онлайн: {players}/{max} ({queued} в очереди)")
+  updatedAt         DateTime @updatedAt
+}
+
+// Игровой сервер и Discord-бот, который показывает его онлайн в статусе.
+// Пароль RCON и токен Discord зашифрованы открытым ключом бота (см. core/src/secrets.ts).
+model OnlineServer {
+  id               Int                 @id @default(autoincrement())
+  name             String
+  host             String
+  port             Int
+  rconPasswordEnc  String?
+  discordTokenEnc  String?
+  secretsUpdatedAt DateTime?
+  enabled          Boolean             @default(true)
+  sortOrder        Int                 @default(0)
+  status           OnlineServerStatus?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+}
+
+enum OnlineState {
+  OFFLINE
+  STARTING
+  ONLINE
+  DISABLED
+}
+
+model OnlineServerStatus {
+  serverId    Int          @id
+  server      OnlineServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  state       OnlineState  @default(OFFLINE)
+  players     Int?
+  maxPlayers  Int?
+  queued      Int?
+  botTag      String?
+  botError    String?
+  rconError   String?
+  lastSeenAt  DateTime?
+  updatedAt   DateTime     @updatedAt
+}
+
 // ===================== Платформа: общие данные сервера =====================
+
+// Открытые ключи ботов для шифрования секретов. Приватные ключи есть только у ботов.
+model BotPublicKey {
+  botKey    String   @id
+  publicKey String
+  updatedAt DateTime @updatedAt
+}
 
 // Снимок ролей и каналов сервера. Его пишет бот, панель только читает,
 // поэтому токены ботов веб-панели не нужны.

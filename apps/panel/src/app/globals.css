@@ -446,3 +446,20 @@ label.btn { cursor: pointer; }
 .chip-x:hover { color: var(--danger); background: var(--danger-bg); }
 a.member-link { color: var(--text); }
 a.member-link:hover { color: #7fb0ff; }
+
+/* Секреты */
+.secret-input { font-family: var(--mono); font-size: 13px; }
+.secret-saved { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--bg); border: 1px dashed var(--border-strong); border-radius: var(--radius); font-size: 13px; color: var(--text-secondary); }
+.secret-saved svg { color: var(--success); flex-shrink: 0; }
+.secret-saved span { flex: 1; }
+
+/* Онлайн серверов */
+.server-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.server-card { background: var(--tile); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.server-card.state-online { border-color: #1f3d27; }
+.server-card.state-offline { border-color: #4a2220; }
+.server-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.server-players { font-size: 15px; color: var(--text-secondary); display: flex; align-items: center; }
+.server-players b { font-size: 26px; color: var(--text); font-weight: 600; margin-right: 6px; letter-spacing: -0.02em; }
+.server-meta { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--text-muted); flex-wrap: wrap; }
+.server-error { font-size: 12.5px; color: var(--danger); background: var(--danger-bg); border-radius: 6px; padding: 6px 8px; }

@@ -29,13 +29,19 @@ export async function recordEvent(db: PrismaClient, e: BotEventInput): Promise<v
   }
 }
 
-// Группы событий для фильтров в панели: префикс type → название.
-export const EVENT_GROUPS: Record<string, string> = {
-  shop: "Магазин",
-  rank: "Ранги",
-  rep: "Репутация",
-  customrole: "Личные роли",
-  purchase: "Сроки покупок",
-  role: "Роли",
-  bot: "Система",
+// Группы событий для фильтров в панели, по ботам: префикс type → название.
+export const EVENT_GROUPS_BY_BOT: Record<string, Record<string, string>> = {
+  rating: {
+    shop: "Магазин",
+    rank: "Ранги",
+    rep: "Репутация",
+    customrole: "Личные роли",
+    purchase: "Сроки покупок",
+    role: "Роли",
+    bot: "Система",
+  },
+  online: {
+    server: "Серверы",
+    bot: "Система",
+  },
 };

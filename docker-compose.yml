@@ -58,6 +58,21 @@ services:
         condition: service_completed_successfully
     networks: [internal, egress]
 
+  online-bot:
+    <<: *hardening
+    build:
+      context: .
+      target: online-bot
+    environment:
+      # Приватный ключ для расшифровки паролей RCON и токенов. Есть только у этого сервиса.
+      ONLINE_SECRET_KEY: ${ONLINE_SECRET_KEY:?Задай ONLINE_SECRET_KEY в .env (pnpm -F online-bot gen-key)}
+      ALLOW_PRIVATE_RCON: ${ALLOW_PRIVATE_RCON:-false}
+      DATABASE_URL: postgresql://flamebot:${POSTGRES_PASSWORD}@db:5432/flamebot
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks: [internal, egress]
+
   panel:
     <<: *hardening
     build:

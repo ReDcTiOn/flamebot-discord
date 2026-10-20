@@ -46,7 +46,9 @@ export type IconName =
   | "layers"
   | "package"
   | "search"
-  | "image";
+  | "image"
+  | "server"
+  | "activity";
 
 export const modules: PanelModule[] = [
   {
@@ -81,6 +83,24 @@ export const modules: PanelModule[] = [
         title: "Журнал",
         items: [{ href: "/rating/events", label: "История", icon: "list" }],
       },
+    ],
+  },
+  {
+    key: "online",
+    title: "Онлайн серверов",
+    description: "Discord-боты, которые показывают онлайн игровых серверов RUST в своём статусе",
+    icon: "server",
+    color: "#3ba55d",
+    sections: [
+      { title: null, items: [{ href: "/online", label: "Обзор", icon: "activity" }] },
+      {
+        title: "Управление",
+        items: [
+          { href: "/online/servers", label: "Серверы", icon: "server" },
+          { href: "/online/settings", label: "Настройки", icon: "layers" },
+        ],
+      },
+      { title: "Журнал", items: [{ href: "/online/events", label: "История", icon: "list" }] },
     ],
   },
 ];
