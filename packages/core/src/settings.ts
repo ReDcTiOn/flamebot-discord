@@ -120,13 +120,18 @@ export async function getPanelSettings(db: Db): Promise<PanelSettings> {
   return db.panelSettings.upsert({ where: { id: 1 }, update: {}, create: { id: 1 } });
 }
 
+// Стартовые ранги FLAME RUST: создаются, только если в базе ещё нет ни одного ранга.
+// roleId — роли нашего Discord-сервера. На другом сервере таких ролей нет: бот их не выдаст,
+// запишет предупреждение в историю, а роли можно переназначить в панели.
+// xpMin/xpMax/scrapPerMessage — начисление за одно сообщение на этом ранге.
 export const DEFAULT_RANKS = [
-  { name: "Голый", emoji: "🩲", minXp: 0, scrapReward: 0 },
-  { name: "Солома", emoji: "🌾", minXp: 500, scrapReward: 50 },
-  { name: "Дерево", emoji: "🪵", minXp: 1500, scrapReward: 100 },
-  { name: "Камень", emoji: "🪨", minXp: 4000, scrapReward: 150 },
-  { name: "Металл", emoji: "⚙️", minXp: 8000, scrapReward: 250 },
-  { name: "МВК", emoji: "💎", minXp: 15000, scrapReward: 500 },
+  { name: "Фармила", emoji: null, minXp: 50, scrapReward: 5, xpMin: 0.02, xpMax: 0.03, scrapPerMessage: 0.05, roleId: "1333079670098497647" },
+  { name: "Билдер", emoji: "🩲", minXp: 100, scrapReward: 7, xpMin: 0.03, xpMax: 0.04, scrapPerMessage: 0.07, roleId: "1333079839569346661" },
+  { name: "Стрелок", emoji: "🌾", minXp: 300, scrapReward: 10, xpMin: 0.04, xpMax: 0.05, scrapPerMessage: 0.09, roleId: "1333079985124020296" },
+  { name: "Рейдер", emoji: "🪵", minXp: 500, scrapReward: 15, xpMin: 0.05, xpMax: 0.06, scrapPerMessage: 0.12, roleId: "1333080059157938189" },
+  { name: "Комбатер", emoji: "🪨", minXp: 700, scrapReward: 20, xpMin: 0.05, xpMax: 0.06, scrapPerMessage: 0.15, roleId: "1333080086986887258" },
+  { name: "Руфкемпер", emoji: "⚙️", minXp: 1000, scrapReward: 50, xpMin: 0.07, xpMax: 0.08, scrapPerMessage: 0.18, roleId: "1333080151172321362" },
+  { name: "Сигма раста", emoji: "💎", minXp: 1500, scrapReward: 100, xpMin: 0.08, xpMax: 0.09, scrapPerMessage: 0.21, roleId: "1333080205593411676" },
 ] as const;
 
 // Создаёт настройки и стартовые ранги, если база пустая.
