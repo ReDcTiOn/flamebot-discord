@@ -102,7 +102,7 @@ export function ActionForm({
   );
 }
 
-export function SubmitButton({ children, variant = "primary" }: { children: ReactNode; variant?: "primary" | "secondary" | "danger" }) {
+export function SubmitButton({ children, variant = "primary" }: { children: ReactNode; variant?: "primary" | "secondary" | "danger" | "danger-solid" }) {
   const pending = useContext(PendingContext);
   return (
     <button type="submit" className={`btn ${variant}`} disabled={pending} aria-busy={pending}>

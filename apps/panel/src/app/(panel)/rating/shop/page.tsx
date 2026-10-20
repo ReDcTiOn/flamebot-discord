@@ -1,7 +1,7 @@
 import { Plus } from "lucide-react";
 import { formatNumber, getRatingSettings, prisma } from "@flamebot/core";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
-import { EmptyState, FieldRow, PageHead, Section, Switch, Tabs, pickTab } from "@/components/Fields";
+import { DangerZone, EmptyState, FieldRow, PageHead, Section, Switch, Tabs, pickTab } from "@/components/Fields";
 import { Icon } from "@/components/Icon";
 import { ShopItemFields, type RoleOption } from "@/components/ShopItemFields";
 import { ModalCancel, ModalTrigger } from "@/components/ui/Modal";
@@ -132,18 +132,19 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
                           <SubmitButton>Сохранить</SubmitButton>
                         </div>
                       </ActionForm>
-                      <div className="danger-zone">
-                        <h3>Удалить товар</h3>
-                        <p className="secondary" style={{ fontSize: 13, marginBottom: 10 }}>
-                          {item._count.purchases > 0
-                            ? "У товара есть покупки, поэтому он будет снят с продажи, а история сохранится."
-                            : "Товар исчезнет из магазина насовсем."}
-                        </p>
-                        <ActionForm action={deleteShopItem} confirm={`Удалить «${item.name}»?`} confirmLabel="Удалить" danger>
-                          <input type="hidden" name="id" value={item.id} />
-                          <SubmitButton variant="danger">Удалить товар</SubmitButton>
-                        </ActionForm>
-                      </div>
+                      <DangerZone
+                        title="Удалить товар"
+                        action={
+                          <ActionForm action={deleteShopItem} confirm={`Удалить «${item.name}»?`} confirmLabel="Удалить" danger>
+                            <input type="hidden" name="id" value={item.id} />
+                            <SubmitButton variant="danger-solid">Удалить</SubmitButton>
+                          </ActionForm>
+                        }
+                      >
+                        {item._count.purchases > 0
+                          ? "У товара есть покупки, поэтому он будет снят с продажи, а история сохранится."
+                          : "Товар исчезнет из магазина насовсем."}
+                      </DangerZone>
                     </ModalTrigger>
                   </div>
                 </div>
@@ -156,7 +157,7 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
         <>
           <ActionForm action={saveCustomRoleSettings}>
             <Section title="Проверка личных ролей" hint="Пока проверка включена, личная роль выдаётся только после одобрения в Discord.">
-              <div className="tiles">
+              <div className="tiles group">
                 <FieldRow icon="shield" label="Согласовывать личные роли" hint="Скрап списывается сразу и возвращается игроку, если заявку отклонят">
                   <Switch name="customRoleApproval" defaultChecked={settings.customRoleApproval} label="Согласовывать личные роли" />
                 </FieldRow>

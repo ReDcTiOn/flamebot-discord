@@ -99,7 +99,7 @@ export default async function XpPage({ searchParams }: { searchParams: Promise<{
       {tab === "xp" && (
         <ActionForm action={saveXpSettings}>
           <Section title="Сообщения" hint="Сколько опыта и скрапа приносит одно сообщение">
-            <div className="tiles">
+            <div className="tiles group">
               <FieldRow icon="trending" label="Опыт за сообщение" hint="Случайное значение от и до, можно с сотыми: 0.01. Для ранга можно задать своё">
                 <NumberInput name="xpMin" defaultValue={s.xpMin} min={0} max={1000} step={0.01} label="Минимум опыта" />
                 <span className="muted">–</span>
@@ -121,7 +121,7 @@ export default async function XpPage({ searchParams }: { searchParams: Promise<{
           </Section>
 
           <Section title="Ранги и роли">
-            <div className="tiles">
+            <div className="tiles group">
               <FieldRow icon="megaphone" label="Объявлять о новом ранге" hint="Канал и текст настраиваются в разделах «Каналы» и «Сообщения»">
                 <Switch name="announceRankUp" defaultChecked={s.announceRankUp} label="Объявлять о новом ранге" />
               </FieldRow>

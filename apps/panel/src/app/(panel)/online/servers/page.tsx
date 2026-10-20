@@ -1,7 +1,7 @@
 import { Plus } from "lucide-react";
 import { prisma, type OnlineServer } from "@flamebot/core";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
-import { EmptyState, PageHead, Section } from "@/components/Fields";
+import { DangerZone, EmptyState, PageHead, Section } from "@/components/Fields";
 import { Icon } from "@/components/Icon";
 import { SecretField } from "@/components/SecretField";
 import { ModalCancel, ModalTrigger } from "@/components/ui/Modal";
@@ -131,16 +131,17 @@ export default async function OnlineServersPage() {
                         <SubmitButton>Сохранить</SubmitButton>
                       </div>
                     </ActionForm>
-                    <div className="danger-zone">
-                      <h3>Удалить сервер</h3>
-                      <p className="secondary" style={{ fontSize: 13, marginBottom: 10 }}>
-                        Бот этого сервера отключится, пароль и токен удалятся из базы.
-                      </p>
-                      <ActionForm action={deleteServer} confirm={`Удалить сервер «${s.name}»?`} confirmLabel="Удалить" danger>
-                        <input type="hidden" name="id" value={s.id} />
-                        <SubmitButton variant="danger">Удалить сервер</SubmitButton>
-                      </ActionForm>
-                    </div>
+                    <DangerZone
+                      title="Удалить сервер"
+                      action={
+                        <ActionForm action={deleteServer} confirm={`Удалить сервер «${s.name}»?`} confirmLabel="Удалить" danger>
+                          <input type="hidden" name="id" value={s.id} />
+                          <SubmitButton variant="danger-solid">Удалить</SubmitButton>
+                        </ActionForm>
+                      }
+                    >
+                      Бот этого сервера отключится, пароль и токен удалятся из базы.
+                    </DangerZone>
                   </ModalTrigger>
                 </div>
               </div>

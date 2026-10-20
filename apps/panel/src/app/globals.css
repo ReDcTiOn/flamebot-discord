@@ -16,9 +16,9 @@
   --accent: #3b82f6;
   --accent-hover: #2f6fd8;
   --accent-bg: #172338;
-  --primary: #f2f2f2;
-  --primary-hover: #ffffff;
-  --on-primary: #111111;
+  --primary: var(--accent);
+  --primary-hover: var(--accent-hover);
+  --on-primary: #ffffff;
   --success: #3fb950;
   --success-bg: #14261a;
   --danger: #f2554b;
@@ -124,7 +124,8 @@ kbd {
 }
 .icon-btn:hover { background: var(--surface-2); color: var(--text); }
 
-.main { padding: 40px 48px 72px; max-width: 1040px; width: 100%; }
+/* Контент — колонкой по центру, как в макете. */
+.main { padding: 40px 48px 72px; max-width: 840px; width: 100%; margin-inline: auto; }
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
 .page-head p { color: var(--text-secondary); margin-top: 6px; font-size: 14px; }
 
@@ -146,6 +147,10 @@ kbd {
   padding: 12px 14px; min-height: 64px;
 }
 .setting:hover { background: var(--tile-hover); }
+/* Группа настроек: одна карточка, строки через тонкие разделители. */
+.tiles.group { gap: 0; background: var(--tile); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+.tiles.group > .setting { border: 0; border-radius: 0; background: transparent; }
+.tiles.group > .setting + .setting { border-top: 1px solid var(--border); }
 .setting-icon {
   width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
   display: grid; place-items: center; background: var(--surface-3); color: var(--text-secondary);
@@ -390,8 +395,16 @@ label.btn { cursor: pointer; }
 .modal-actions .spacer { margin-right: auto; }
 .btn.danger-solid { background: #c93a32; border-color: #c93a32; color: #fff; }
 .btn.danger-solid:hover { background: #b0312a; }
-.danger-zone { margin-top: 18px; padding: 14px; border: 1px solid #4a2220; border-radius: var(--radius-lg); background: rgba(242, 85, 75, 0.05); }
-.danger-zone h3 { font-size: 14px; color: var(--danger); margin-bottom: 4px; }
+/* Опасное действие: красная рамка, пояснение слева, красная кнопка справа. */
+.danger-zone {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap;
+  margin-top: 18px; padding: 14px 16px; border: 1px solid #5c2723; border-radius: var(--radius-lg); background: rgba(242, 85, 75, 0.05);
+}
+.danger-zone-text { flex: 1 1 260px; min-width: 0; }
+.danger-zone h3 { font-size: 14px; font-weight: 500; margin-bottom: 3px; }
+.danger-zone p { color: var(--text-secondary); font-size: 13px; }
+.danger-zone-action { flex-shrink: 0; }
+.main > .danger-zone { margin-top: 28px; }
 .stat-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
 .stat-row .metric { padding: 10px 12px; }
 .stat-row .metric-value { font-size: 18px; }

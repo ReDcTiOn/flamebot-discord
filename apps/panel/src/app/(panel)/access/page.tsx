@@ -3,7 +3,7 @@ import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { requirePage } from "@/lib/auth";
 import { listRoles, roleColor } from "@/lib/guild";
 import { revokeAllSessions, saveAccess } from "../actions";
-import { PageHead } from "@/components/Fields";
+import { DangerZone, PageHead } from "@/components/Fields";
 
 export const metadata = { title: "Доступ" };
 
@@ -51,11 +51,8 @@ export default async function AccessPage() {
         <div className="card-head">
           <div>
             <h2>Активные сессии</h2>
-            <p>Если подозреваешь, что кто-то получил доступ, заверши все сессии.</p>
+            <p>Кто сейчас вошёл в панель и до какого времени действует вход.</p>
           </div>
-          <ActionForm action={revokeAllSessions} confirm="Завершить все сессии, кроме твоей?">
-            <SubmitButton variant="danger">Завершить все, кроме моей</SubmitButton>
-          </ActionForm>
         </div>
         <table className="table">
           <thead>
@@ -80,6 +77,17 @@ export default async function AccessPage() {
           </tbody>
         </table>
       </div>
+
+      <DangerZone
+        title="Завершить все сессии"
+        action={
+          <ActionForm action={revokeAllSessions} confirm="Завершить все сессии, кроме твоей?" confirmLabel="Завершить" danger>
+            <SubmitButton variant="danger-solid">Завершить</SubmitButton>
+          </ActionForm>
+        }
+      >
+        Если подозреваешь, что кто-то получил доступ. Все, кроме тебя, выйдут из панели и войдут заново через Discord.
+      </DangerZone>
     </>
   );
 }

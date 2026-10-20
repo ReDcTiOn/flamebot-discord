@@ -70,6 +70,19 @@ export function pickTab<T extends string>(value: string | undefined, allowed: re
   return allowed.includes(value as T) ? (value as T) : allowed[0]!;
 }
 
+// Опасное действие отдельной красной карточкой: что произойдёт и кнопка.
+export function DangerZone({ title, children, action }: { title: string; children: ReactNode; action: ReactNode }) {
+  return (
+    <div className="danger-zone">
+      <div className="danger-zone-text">
+        <h3>{title}</h3>
+        <p>{children}</p>
+      </div>
+      <div className="danger-zone-action">{action}</div>
+    </div>
+  );
+}
+
 export function EmptyState({ icon, title, hint }: { icon: IconName; title: string; hint?: string }) {
   return (
     <div className="empty-state">

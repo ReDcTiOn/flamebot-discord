@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { formatNumber, prisma, rankProgress, SNOWFLAKE } from "@flamebot/core";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { EventTable, eventGroup, type TimelineRow } from "@/components/EventTable";
-import { EmptyState, Section, Tabs, pickTab } from "@/components/Fields";
+import { DangerZone, EmptyState, Section, Tabs, pickTab } from "@/components/Fields";
 import { ModalCancel, ModalTrigger } from "@/components/ui/Modal";
 import { requirePage } from "@/lib/auth";
 import { avatarUrl } from "@/lib/discord";
@@ -172,22 +172,6 @@ export default async function MemberPage({ params, searchParams }: { params: Pro
               </div>
             </ActionForm>
           </ModalTrigger>
-          <ModalTrigger label="Обнулить" buttonClass="btn danger" title={`Обнулить ${m.displayName}?`} size="sm">
-            <p className="secondary" style={{ fontSize: 13, marginBottom: 12 }}>
-              Опыт, скрап, репутация и бейджи станут нулевыми, роли рангов снимутся. Отменить нельзя.
-            </p>
-            <ActionForm action={resetMember}>
-              <input type="hidden" name="memberId" value={m.id} />
-              <label className="stack">
-                <span>Причина</span>
-                <input type="text" name="reason" required minLength={3} maxLength={200} className="wide" placeholder="Накрутка опыта" />
-              </label>
-              <div className="modal-actions">
-                <ModalCancel />
-                <SubmitButton variant="danger">Обнулить</SubmitButton>
-              </div>
-            </ActionForm>
-          </ModalTrigger>
         </div>
       </div>
 
@@ -284,6 +268,30 @@ export default async function MemberPage({ params, searchParams }: { params: Pro
               </div>
             )}
           </Section>
+
+          <DangerZone
+            title="Обнулить игрока"
+            action={
+              <ModalTrigger label="Обнулить" buttonClass="btn danger-solid" title={`Обнулить ${m.displayName}?`} size="sm">
+                <p className="secondary" style={{ fontSize: 13, marginBottom: 12 }}>
+                  Опыт, скрап, репутация и бейджи станут нулевыми, роли рангов снимутся. Отменить нельзя.
+                </p>
+                <ActionForm action={resetMember}>
+                  <input type="hidden" name="memberId" value={m.id} />
+                  <label className="stack">
+                    <span>Причина</span>
+                    <input type="text" name="reason" required minLength={3} maxLength={200} className="wide" placeholder="Накрутка опыта" />
+                  </label>
+                  <div className="modal-actions">
+                    <ModalCancel />
+                    <SubmitButton variant="danger-solid">Обнулить</SubmitButton>
+                  </div>
+                </ActionForm>
+              </ModalTrigger>
+            }
+          >
+            Опыт, скрап, репутация и бейджи станут нулевыми, роли рангов снимутся. Например, за накрутку опыта.
+          </DangerZone>
         </>
       )}
 

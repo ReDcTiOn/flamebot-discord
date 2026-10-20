@@ -29,7 +29,7 @@ export default async function RepPage({ searchParams }: { searchParams: Promise<
       {tab === "limits" && (
         <ActionForm action={saveRepSettings}>
           <Section title="Защита от накрутки">
-            <div className="tiles">
+            <div className="tiles group">
               <FieldRow icon="clock" label="Как часто можно давать, часов" hint="Один /rep за это время">
                 <NumberInput name="repCooldownHours" defaultValue={s.repCooldownHours} min={1} max={720} label="Часов" />
               </FieldRow>

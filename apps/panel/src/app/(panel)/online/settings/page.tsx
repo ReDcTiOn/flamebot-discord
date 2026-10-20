@@ -15,7 +15,7 @@ export default async function OnlineSettingsPage() {
       <PageHead title="Настройки" hint="Общие для всех серверов. После сохранения боты переподключатся в течение 10 секунд." />
       <ActionForm action={saveOnlineSettings}>
         <Section title="Тексты статуса в Discord" hint="Подстановки: {players} — игроков, {max} — слотов, {queued} — в очереди.">
-          <div className="tiles">
+          <div className="tiles group">
             <FieldRow icon="activity" label="Сервер онлайн" hint="Когда очереди нет">
               <input type="text" name="onlineText" defaultValue={s.onlineText} maxLength={128} required style={{ width: 320 }} />
             </FieldRow>
@@ -32,7 +32,7 @@ export default async function OnlineSettingsPage() {
         </Section>
 
         <Section title="Подключение">
-          <div className="tiles">
+          <div className="tiles group">
             <FieldRow icon="repeat" label="Опрос сервера, секунд" hint="Как часто спрашивать онлайн и как долго ждать перед переподключением">
               <NumberInput name="pollIntervalSec" defaultValue={Math.round(s.pollIntervalMs / 1000)} min={2} max={300} label="Опрос, секунд" />
             </FieldRow>
