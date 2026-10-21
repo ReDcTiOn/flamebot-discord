@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "Member" ADD COLUMN     "voiceSeconds" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "voiceXp" DECIMAL(14,2) NOT NULL DEFAULT 0;
+

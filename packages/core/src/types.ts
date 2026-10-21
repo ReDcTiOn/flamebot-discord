@@ -6,7 +6,7 @@ import type {
 } from "@prisma/client";
 
 // Типы моделей так, как их отдаёт наш клиент базы: десятичные поля уже number (см. db.ts).
-export type Member = Omit<PMember, "xp" | "scrap"> & { xp: number; scrap: number };
+export type Member = Omit<PMember, "xp" | "scrap" | "voiceXp"> & { xp: number; scrap: number; voiceXp: number };
 export type RatingSettings = Omit<PRatingSettings, "xpMin" | "xpMax" | "scrapPerAward"> & {
   xpMin: number;
   xpMax: number;

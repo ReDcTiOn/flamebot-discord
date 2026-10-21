@@ -14,6 +14,7 @@ function createClient() {
       member: {
         xp: { needs: { xp: true }, compute: (m) => num(m.xp) },
         scrap: { needs: { scrap: true }, compute: (m) => num(m.scrap) },
+        voiceXp: { needs: { voiceXp: true }, compute: (m) => num(m.voiceXp) },
       },
       ratingSettings: {
         xpMin: { needs: { xpMin: true }, compute: (s) => num(s.xpMin) },

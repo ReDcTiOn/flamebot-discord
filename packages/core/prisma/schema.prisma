@@ -86,6 +86,10 @@ model Member {
   scrap        Decimal   @default(0) @db.Decimal(14, 2)
   rep          Int       @default(0)
   messageCount Int       @default(0)
+  // Голос: сколько секунд провёл в голосовых каналах и сколько из общего опыта (xp) получено за голос.
+  // Начисление за голос появится позже; время в голосе переносится из JuniperBot.
+  voiceSeconds Int       @default(0)
+  voiceXp      Decimal   @default(0) @db.Decimal(14, 2)
   lastXpAt     DateTime?
   rankId       Int?
   rank         Rank?     @relation(fields: [rankId], references: [id], onDelete: SetNull)

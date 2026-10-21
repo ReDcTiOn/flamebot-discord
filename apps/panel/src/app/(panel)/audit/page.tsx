@@ -76,6 +76,7 @@ const ACTIONS: Record<string, string> = {
   "card.update": "Изменил карточку профиля",
   "card.toggle": "Переключил вид /profile",
   "card.upload": "Загрузил картинку для карточки",
+  "member.import": "Перенёс опыт из JuniperBot",
   "customrole.settings": "Изменил проверку личных ролей",
   "customrole.approve": "Одобрил личную роль",
   "customrole.reject": "Отклонил личную роль",
