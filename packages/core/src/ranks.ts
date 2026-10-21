@@ -17,6 +17,15 @@ export function rankForXp<T extends RankLike>(ranks: readonly T[], xp: number): 
   return current;
 }
 
+// Самый высокий ранг, роль которого у человека уже есть (null — ни одной роли ранга).
+// Нужен, чтобы при переносе опыта никто не оказался ниже роли, которую уже носит.
+export function rankFromRoles<T extends RankLike & { roleId: string | null }>(ranks: readonly T[], roleIds: Iterable<string>): T | null {
+  const held = new Set(roleIds);
+  let best: T | null = null;
+  for (const rank of ranks) if (rank.roleId && held.has(rank.roleId) && (!best || rank.minXp > best.minXp)) best = rank;
+  return best;
+}
+
 export function nextRankForXp<T extends RankLike>(ranks: readonly T[], xp: number): T | null {
   return sorted(ranks).find((r) => r.minXp > xp) ?? null;
 }

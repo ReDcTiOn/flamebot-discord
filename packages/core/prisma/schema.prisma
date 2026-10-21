@@ -97,6 +97,8 @@ model Member {
   rewardedUpToXp Int     @default(0)
   // Панель ставит флаг, когда меняет опыт или ранги; бот пересчитывает роли в фоне.
   needsRoleSync Boolean  @default(false)
+  // Импорт ставит флаг, а бот проверяет, есть ли человек на сервере, и обновляет имя. Роли не трогает.
+  needsMemberCheck Boolean @default(false)
   inGuild      Boolean   @default(true)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -111,6 +113,7 @@ model Member {
   @@index([scrap(sort: Desc)])
   @@index([lastXpAt])
   @@index([needsRoleSync])
+  @@index([needsMemberCheck])
 }
 
 model RepTransaction {

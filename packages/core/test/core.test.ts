@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { checkRoleSafeToGrant, Perm } from "../src/permissions.js";
-import { nextRankForXp, rankForXp, rankProgress } from "../src/ranks.js";
+import { nextRankForXp, rankForXp, rankFromRoles, rankProgress } from "../src/ranks.js";
 import { xpSettingsSchema } from "../src/settings.js";
 import { renderTemplate } from "../src/util.js";
 
@@ -71,5 +71,18 @@ describe("шаблоны и настройки", () => {
     assert.equal(xpSettingsSchema.safeParse(base).success, false);
     assert.equal(xpSettingsSchema.safeParse({ ...base, xpMax: 40 }).success, true);
     assert.equal(xpSettingsSchema.safeParse({ ...base, xpMax: 40, xpCooldownSec: 1 }).success, false);
+  });
+});
+
+describe("ранг по ролям", () => {
+  const ranks = [
+    { id: 1, name: "Фармила", minXp: 50, roleId: "r1" },
+    { id: 2, name: "Билдер", minXp: 100, roleId: "r2" },
+    { id: 3, name: "Без роли", minXp: 300, roleId: null },
+  ];
+  it("берёт самую высокую роль ранга и игнорирует остальные роли", () => {
+    assert.equal(rankFromRoles(ranks, ["x", "r1", "r2"])?.name, "Билдер");
+    assert.equal(rankFromRoles(ranks, ["r1"])?.name, "Фармила");
+    assert.equal(rankFromRoles(ranks, ["x"]), null);
   });
 });

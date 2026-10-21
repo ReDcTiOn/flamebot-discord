@@ -1,5 +1,5 @@
 import { DiscordAPIError, RESTJSONErrorCodes, type Guild } from "discord.js";
-import { prisma, rankForXp } from "@flamebot/core";
+import { prisma, rankForXp, rankFromRoles } from "@flamebot/core";
 import { log } from "../logger.js";
 import { getState } from "../state.js";
 import { applyRank } from "./ranks.js";
@@ -73,6 +73,52 @@ export async function processRoleSyncQueue(guild: Guild): Promise<void> {
   }
 }
 
+// Проверяет участников, перенесённых из другого бота: ушедших отмечает, остальным обновляет имя
+// и подтягивает опыт до порога самой высокой роли ранга, которая у них уже есть, — чтобы все
+// остались при своих ролях. Роли в Discord не меняет, награды за ранги не выдаёт.
+export async function processMemberChecks(guild: Guild): Promise<void> {
+  const queue = await prisma.member.findMany({
+    where: { needsMemberCheck: true },
+    select: { id: true, xp: true, rewardedUpToXp: true },
+    take: 50,
+  });
+  if (queue.length === 0) return;
+  const { ranks } = await getState();
+  let raised = 0;
+  for (const row of queue) {
+    try {
+      const member = await guild.members.fetch(row.id).catch((e) => (isUnknownMember(e) ? null : Promise.reject(e)));
+      if (!member) {
+        await prisma.member.update({ where: { id: row.id }, data: { needsMemberCheck: false, inGuild: false } });
+        continue;
+      }
+      const byRole = rankFromRoles(ranks, member.roles.cache.keys());
+      const xp = Math.max(row.xp, byRole?.minXp ?? 0);
+      const rank = rankForXp(ranks, xp);
+      if (xp > row.xp) raised++;
+      await prisma.member.update({
+        where: { id: row.id },
+        data: {
+          needsMemberCheck: false,
+          inGuild: true,
+          username: member.user.username.slice(0, 64),
+          displayName: member.displayName.slice(0, 64),
+          avatarHash: member.user.avatar,
+          xp,
+          rankId: rank?.id ?? null,
+          rewardedUpToXp: Math.max(row.rewardedUpToXp, rank?.minXp ?? 0),
+        },
+      });
+    } catch (err) {
+      log.warn(`Не удалось проверить участника ${row.id}`, err);
+    }
+  }
+  if (raised) {
+    const who = raised % 10 === 1 && raised % 100 !== 11 ? "участника" : "участников";
+    event("rank.import", `Перенос опыта: у ${raised} ${who} опыт поднят до порога роли ранга, которая у них уже есть`, { details: { raised } });
+  }
+}
+
 // Обычные события храним 90 дней, предупреждения и ошибки — 180.
 export async function cleanupEvents(): Promise<void> {
   const day = 86_400_000;
@@ -83,6 +129,7 @@ export async function cleanupEvents(): Promise<void> {
 export function startJobs(guild: Guild, every: (fn: () => Promise<void>, ms: number) => void): void {
   every(() => expirePurchases(guild), 5 * 60_000);
   every(() => processRoleSyncQueue(guild), 30_000);
+  every(() => processMemberChecks(guild), 30_000);
   every(() => expireOldRequests(guild), 30 * 60_000);
   every(cleanupEvents, 24 * 3_600_000);
 }

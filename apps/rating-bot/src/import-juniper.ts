@@ -10,7 +10,10 @@
 // время в голосе переносится отдельно в voiceSeconds.
 //
 // Повторный запуск безопасен: опыт ставится, только если пересчитанный больше текущего.
-// Скрап за сообщения и награды за ранги не начисляются; роли бот раздаст сам в фоне.
+// Роли в Discord не трогаются: они у игроков уже есть. Ранг записывается в базу сразу,
+// награды за него считаются выданными, скрап за сообщения не начисляется.
+// Потом бот проверяет каждого из файла: ушедших отмечает, остальным обновляет имя и подтягивает
+// опыт до порога самой высокой роли ранга, которая у человека уже есть, — все остаются при своих ролях.
 import { existsSync, readFileSync } from "node:fs";
 import { getRatingSettings, prisma, rankForXp, simulateMessages } from "@flamebot/core";
 
@@ -55,7 +58,10 @@ for (const m of raw.members) {
 const [settings, ranks, existing] = await Promise.all([
   getRatingSettings(prisma),
   prisma.rank.findMany({ orderBy: { minXp: "asc" } }),
-  prisma.member.findMany({ where: { id: { in: [...byId.keys()] } }, select: { id: true, xp: true, messageCount: true, voiceSeconds: true, displayName: true } }),
+  prisma.member.findMany({
+    where: { id: { in: [...byId.keys()] } },
+    select: { id: true, xp: true, messageCount: true, voiceSeconds: true, rewardedUpToXp: true, displayName: true },
+  }),
 ]);
 const current = new Map(existing.map((m) => [m.id, m]));
 
@@ -118,6 +124,8 @@ console.table(
   })),
 );
 
+console.log("\nДо порога ролей ранга опыт поднимет бот после записи: роли видит только он, в предпросмотре этого нет.");
+
 if (!apply) {
   console.log("\nЭто предпросмотр, база не менялась. Чтобы записать, запусти ту же команду с --apply.");
   await prisma.$disconnect();
@@ -133,11 +141,24 @@ for (let i = 0; i < todo.length; i += 200) {
   await prisma.$transaction(
     chunk.map((p) => {
       const have = current.get(p.id);
+      const rank = rankForXp(ranks, p.after);
+      // Ранг — сразу в базу, без похода в Discord; награды за ранги до него считаем выданными.
+      const rankData = { rankId: rank?.id ?? null, rewardedUpToXp: Math.max(have?.rewardedUpToXp ?? 0, rank?.minXp ?? 0) };
       if (!have) {
         created++;
-        // Есть ли человек на сервере, проверит бот при пересчёте ролей и снимет отметку, если нет.
+        // В топе человек появится, когда бот убедится, что он на сервере.
         return prisma.member.create({
-          data: { id: p.id, username: p.name, displayName: p.name, xp: p.after, messageCount: p.messages, voiceSeconds: p.voiceSeconds, needsRoleSync: true },
+          data: {
+            id: p.id,
+            username: p.name,
+            displayName: p.name,
+            xp: p.after,
+            messageCount: p.messages,
+            voiceSeconds: p.voiceSeconds,
+            ...rankData,
+            inGuild: false,
+            needsMemberCheck: true,
+          },
         });
       }
       updated++;
@@ -147,13 +168,14 @@ for (let i = 0; i < todo.length; i += 200) {
           xp: p.after,
           messageCount: Math.max(have.messageCount, p.messages),
           voiceSeconds: Math.max(have.voiceSeconds, p.voiceSeconds),
-          // Пересчёт ролей без наград за ранги: так бот делает при любой ручной правке опыта.
-          ...(p.after > have.xp ? { needsRoleSync: true } : {}),
+          ...(p.after > have.xp ? rankData : {}),
         },
       });
     }),
   );
 }
+// Всех из файла бот проверит: кто на сервере, и подтянет опыт до роли ранга, которая у человека уже есть.
+const checked = await prisma.member.updateMany({ where: { id: { in: plans.map((p) => p.id) } }, data: { needsMemberCheck: true } });
 await prisma.auditLog.create({
   data: {
     module: "rating",
@@ -164,5 +186,9 @@ await prisma.auditLog.create({
     details: { file: raw.exportedAt ?? null, guildId: raw.guildId ?? null, factor, created, updated, unchanged: plans.length - todo.length },
   },
 });
-console.log(`\nГотово: создано ${created}, обновлено ${updated}, без изменений ${plans.length - todo.length}. Роли бот раздаст в фоне, по 25 человек за проход.`);
+console.log(`\nГотово: создано ${created}, обновлено ${updated}, без изменений ${plans.length - todo.length}. Роли не менялись.`);
+console.log(
+  `Бот проверит ${checked.count} участников в фоне, по 50 за 30 секунд (около ${Math.ceil(checked.count / 100)} мин): ушедших отметит, ` +
+    "остальным подтянет опыт до порога роли ранга, которая у них уже есть, и они появятся в топе.",
+);
 await prisma.$disconnect();
