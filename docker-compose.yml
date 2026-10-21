@@ -114,6 +114,23 @@ services:
         condition: service_completed_successfully
     networks: [internal, egress]
 
+  notice-bot:
+    <<: *hardening
+    build:
+      context: .
+      target: notice-bot
+    environment:
+      # Токен Telegram, вебхуки Discord, ключ ВКонтакте и gamestores задаются в панели
+      # («Объявления о вайпах» → «Подключение»). PANEL_URL — для ссылок «Открыть в панели» в Telegram.
+      PANEL_URL: ${PANEL_URL:-}
+      DATABASE_URL: postgresql://flamebot:${POSTGRES_PASSWORD}@db:5432/flamebot
+    volumes:
+      - notice-bot-data:/data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks: [internal, egress]
+
   panel:
     <<: *hardening
     build:
@@ -151,3 +168,4 @@ volumes:
   online-bot-data:
   giveaway-bot-data:
   maps-bot-data:
+  notice-bot-data:

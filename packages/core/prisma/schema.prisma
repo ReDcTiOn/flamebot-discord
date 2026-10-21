@@ -578,6 +578,170 @@ model MapsAction {
   @@index([status, id])
 }
 
+// ===================== Объявления о вайпах (модуль "notices") =====================
+// Перенос Python-бота msg_wipe_bot: за несколько часов до вайпа админы в Telegram или в панели
+// подтверждают текст, в назначенное время бот публикует его в Discord и ВКонтакте
+// и создаёт промокод в gamestores. Плюс утренний план дня и напоминания с кнопкой.
+
+// Единственная строка с id = 1.
+model NoticeSettings {
+  id                  Int      @id @default(1)
+  timezone            String   @default("Europe/Moscow")
+  timezoneLabel       String   @default("МСК")
+  // Когда присылать текст на подтверждение и когда напоминать, если не подтвердили.
+  notifyMinutes       Int      @default(600)
+  remindMinutes       Int      @default(60)
+  // Бот был выключен и время отправки прошло больше чем на столько — не отправлять.
+  maxLateMinutes      Int      @default(30)
+  // Пробный режим: наружу ничего не уходит, промокоды не создаются.
+  dryRun              Boolean  @default(false)
+  telegramAdminIds    String[] @default([])
+  // ВКонтакте: сообщество и заранее загруженные фото (токен сообщества не может загружать фото, ошибка 27).
+  vkGroupId           Int?
+  vkPhotoRegular      String?
+  vkPhotoGlobal       String?
+  testVkGroupId       Int?
+  testVkPhotoRegular  String?
+  testVkPhotoGlobal   String?
+  // Промокод gamestores: общий код, тип, срок действия после вайпа.
+  gamestoresStoreId   String?
+  promoCode           String   @default("FLAMEWIPE")
+  promoType           String   @default("discount")
+  promoDaysAfter      Int      @default(1)
+  promoEndTime        String   @default("23:59")
+  promoLimitUses      Int      @default(0)
+  // Тестовые прогоны создают настоящий тестовый промокод (TEST-…, 1%, одно использование).
+  promoTestReal       Boolean  @default(false)
+  // План дня и напоминания.
+  agendaEnabled       Boolean  @default(true)
+  agendaSendAt        String   @default("05:00")
+  agendaGraceMinutes  Int      @default(240)
+  agendaGreeting      String   @default("Доброе утро!")
+  updatedAt           DateTime @updatedAt
+}
+
+// Токены и ключи, зашифрованные открытым ключом бота: панель и база их прочитать не могут.
+model NoticeSecret {
+  name      String   @id
+  valueEnc  String
+  hint      String?
+  setAt     DateTime @default(now())
+  setById   String?
+  setByName String?
+}
+
+// Текст объявления: тело вебхука Discord и пост ВКонтакте. Подстановки {date} {time} {weekday} {ts}.
+model NoticeTemplate {
+  id          String   @id // латиницей, едет в кнопки Telegram
+  title       String
+  kind        String // regular | global
+  discord     Json
+  vk          String
+  // Скидка промокода в процентах; null — промокод этому тексту не нужен.
+  promoAmount Int?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Правило расписания: день недели, время и когда вайп глобальный. Расчёт тот же, что у бота карт.
+model NoticeRule {
+  key               String    @id
+  weekday           Int // 0 = понедельник
+  time              String
+  forceTimezone     String?
+  forceTime         String?
+  bpFirstOfMonth    Boolean   @default(false)
+  bpEveryDays       Int       @default(0)
+  bpAnchor          DateTime? @db.Date
+  // Тексты по умолчанию: уходят, если админы не выбрали другой.
+  regularTemplateId String?
+  globalTemplateId  String?
+  enabled           Boolean   @default(true)
+  updatedAt         DateTime  @updatedAt
+}
+
+// Вайп и его объявление. key — местное время вайпа «2026-10-22T17:00» (у тестовых «t…»).
+// status: pending -> sending -> sent | partial; либо skipped / missed.
+model NoticeEvent {
+  key         String   @id
+  wipeAt      DateTime
+  kind        String
+  templateId  String
+  status      String   @default("pending")
+  confirmed   Boolean  @default(false)
+  confirmedBy String?
+  notified    Boolean  @default(false)
+  reminded    Boolean  @default(false)
+  isTest      Boolean  @default(false)
+  // {"discord": {"state": "ok|dry|error", "detail": "…"}, "vk": {…}, "promo": {…}}
+  results     Json     @default("{}")
+  // Сообщения Telegram с кнопками: [[chatId, messageId], …]. Их обновляет и гасит бот.
+  msgs        Json     @default("[]")
+  // Созданный ботом промокод: {"id", "code", "amount", "date_end"}.
+  promo       Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status, wipeAt])
+  @@index([wipeAt(sort: Desc)])
+}
+
+// План дня: пункты по дням недели (0 = понедельник). Подстановки {wipe_time} {wipe_kind} {promo}.
+model NoticeAgendaDay {
+  weekday Int      @id
+  items   String[]
+}
+
+// Напоминание с кнопкой: приходит по расписанию, пока не нажмут «Готово».
+model NoticeReminder {
+  id           String   @id
+  title        String
+  text         String
+  button       String   @default("✅ Готово")
+  doneText     String   @default("Больше сегодня не напомню.")
+  days         Int[]
+  times        String[]
+  graceMinutes Int      @default(60)
+  enabled      Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  updatedAt    DateTime @updatedAt
+}
+
+// Что из плана дня и напоминаний уже отправлено: "agenda:2026-10-22", "remind:giveaway:2026-10-22".
+model NoticeDaily {
+  key       String   @id
+  data      Json
+  updatedAt DateTime @updatedAt
+}
+
+// Картинка поста по типу вайпа (regular | global). Прикрепляется к Discord и ВКонтакте.
+model NoticeImage {
+  kind          String   @id
+  data          Bytes
+  mime          String
+  size          Int
+  updatedAt     DateTime @updatedAt
+  updatedByName String?
+}
+
+// Задания из панели для бота: подтвердить, сменить текст, отменить, тест, проверка подключений.
+model NoticeAction {
+  id        Int       @id @default(autoincrement())
+  kind      String
+  args      Json
+  // pending -> running -> done | error
+  status    String    @default("pending")
+  result    String?
+  details   Json?
+  byId      String?
+  byName    String?
+  createdAt DateTime  @default(now())
+  doneAt    DateTime?
+
+  @@index([status, id])
+}
+
 // ===================== Платформа: общие данные сервера =====================
 
 // Открытые ключи ботов для шифрования секретов. Приватные ключи есть только у ботов.

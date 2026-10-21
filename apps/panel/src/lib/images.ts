@@ -72,3 +72,43 @@ export async function sanitizeImage(file: File): Promise<{ data: Buffer; mime: s
   if (info.kind === "jpeg") return { data: canvas.toBuffer("image/jpeg", 90), mime: "image/jpeg", width, height };
   return { data: canvas.toBuffer("image/png"), mime: "image/png", width, height };
 }
+
+// Картинка поста о вайпе: уходит вложением в Discord (лимит вебхука 10 МБ) и на стену ВКонтакте.
+export const MAX_POST_UPLOAD_BYTES = 15 * 1024 * 1024;
+const POST_MAX_SIDE = 4096;
+const POST_LIMIT_BYTES = 9.5 * 1024 * 1024;
+
+export async function sanitizePostImage(file: File): Promise<{ data: Buffer; mime: string; width: number; height: number }> {
+  if (file.size === 0) throw new ActionError("Файл пустой");
+  if (file.size > MAX_POST_UPLOAD_BYTES) throw new ActionError("Картинка больше 15 МБ");
+
+  const buf = Buffer.from(await file.arrayBuffer());
+  const info = sniff(buf);
+  if (!info) throw new ActionError("Поддерживаются только PNG, JPEG и WebP");
+  if (!info.width || !info.height || info.width > MAX_SIDE || info.height > MAX_SIDE || info.width * info.height > MAX_PIXELS) {
+    throw new ActionError(`Картинка слишком большая: максимум ${MAX_SIDE}×${MAX_SIDE} пикселей`);
+  }
+
+  let img;
+  try {
+    img = await loadImage(buf);
+  } catch {
+    throw new ActionError("Не удалось прочитать картинку");
+  }
+  const scale = Math.min(1, POST_MAX_SIDE / img.width, POST_MAX_SIDE / img.height);
+  const width = Math.max(1, Math.round(img.width * scale));
+  const height = Math.max(1, Math.round(img.height * scale));
+  const canvas = createCanvas(width, height);
+  canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+
+  // PNG оставляем PNG, пока он помещается во вложение Discord; иначе — JPEG.
+  if (info.kind !== "jpeg") {
+    const png = canvas.toBuffer("image/png");
+    if (png.length <= POST_LIMIT_BYTES) return { data: png, mime: "image/png", width, height };
+  }
+  for (const quality of [92, 85, 75]) {
+    const jpeg = canvas.toBuffer("image/jpeg", quality);
+    if (jpeg.length <= POST_LIMIT_BYTES) return { data: jpeg, mime: "image/jpeg", width, height };
+  }
+  throw new ActionError("Даже в JPEG картинка больше 9,5 МБ: уменьши её");
+}

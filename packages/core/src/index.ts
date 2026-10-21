@@ -41,6 +41,16 @@ export type {
   MapsSlot,
   MapsCandidate,
   MapsAction,
+  NoticeSettings,
+  NoticeSecret,
+  NoticeTemplate,
+  NoticeRule,
+  NoticeEvent,
+  NoticeAgendaDay,
+  NoticeReminder,
+  NoticeDaily,
+  NoticeImage,
+  NoticeAction,
   EventLevel,
   CardAsset,
   AuditLog,
@@ -54,3 +64,4 @@ export * from "./control.js";
 export * from "./giveaways.js";
 export * from "./maps.js";
 export * from "./mapsScoring.js";
+export * from "./notices.js";

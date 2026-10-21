@@ -16,8 +16,8 @@ const config: NextConfig = {
   // Нативный модуль для проверки и перекодирования загруженных картинок.
   serverExternalPackages: ["@napi-rs/canvas"],
   experimental: {
-    // Загрузка фона карточки до 5 МБ плюс запас на multipart.
-    serverActions: { bodySizeLimit: "6mb" },
+    // Картинка поста о вайпе до 15 МБ (фон карточки — до 5 МБ) плюс запас на multipart.
+    serverActions: { bodySizeLimit: "16mb" },
   },
   // Заголовки безопасности, не зависящие от запроса. CSP с nonce ставится в src/proxy.ts.
   async headers() {

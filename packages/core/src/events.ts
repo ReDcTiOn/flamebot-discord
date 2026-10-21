@@ -59,4 +59,12 @@ export const EVENT_GROUPS_BY_BOT: Record<string, Record<string, string>> = {
     telegram: "Telegram",
     bot: "Система",
   },
+  notices: {
+    wipe: "Вайпы",
+    send: "Отправка",
+    promo: "Промокоды",
+    agenda: "План дня",
+    telegram: "Telegram",
+    bot: "Система",
+  },
 };

@@ -29,11 +29,12 @@ describe("уведомления онлайна в Telegram", () => {
   });
 
   it("токен и подсказка без секрета", () => {
-    const token = "123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw0";
+    // Выдуманный токен собирается из частей, чтобы сканер секретов GitHub не принимал его за настоящий.
+    const token = ["123456789", `${"x".repeat(31)}saw0`].join(":");
     assert.ok(telegramTokenSchema.safeParse(token).success);
     assert.ok(!telegramTokenSchema.safeParse("123:short").success);
     const hint = telegramTokenHint(token);
     assert.equal(hint, "бот 123456789, …saw0");
-    assert.ok(!hint.includes("AAHdq"));
+    assert.ok(!hint.includes("xxxx"));
   });
 });

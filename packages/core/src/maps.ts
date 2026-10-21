@@ -132,12 +132,15 @@ export function mapsSecretHint(name: MapsSecretName, value: string): string {
 
 // ---------------------------------------------------------------- расписание
 
-export type MapsRuleLike = Pick<
+// Правило расписания без привязки к модулю: им же считает вайпы бот объявлений.
+export type ScheduleRuleLike = Pick<
   MapsWipeRule,
-  "key" | "weekday" | "time" | "serverIds" | "forceTimezone" | "forceTime" | "bpFirstOfMonth" | "bpEveryDays" | "bpAnchor" | "enabled"
-> & { pool: unknown; template: unknown };
+  "key" | "weekday" | "time" | "forceTimezone" | "forceTime" | "bpFirstOfMonth" | "bpEveryDays" | "bpAnchor" | "enabled"
+>;
 
-export interface Wipe<R extends MapsRuleLike = MapsRuleLike> {
+export type MapsRuleLike = ScheduleRuleLike & Pick<MapsWipeRule, "serverIds"> & { pool: unknown; template: unknown };
+
+export interface Wipe<R extends ScheduleRuleLike = MapsRuleLike> {
   id: string; // например "thursday-2026-10-22"
   rule: R;
   wipeAt: Date;
@@ -150,7 +153,7 @@ const dayNumber = (d: CalendarDate) => Date.UTC(d.year, d.month - 1, d.day) / 86
 
 // Время вайпа в этот день. В первую неделю месяца у правила может быть своё время в другом поясе:
 // форс-вайп в 14:00 по Нью-Йорку — это 21:00 МСК летом и 22:00 зимой.
-export function wipeDatetime(rule: MapsRuleLike, day: CalendarDate, timezone: string): Date {
+export function wipeDatetime(rule: ScheduleRuleLike, day: CalendarDate, timezone: string): Date {
   if (rule.forceTimezone && rule.forceTime && day.day <= 7) {
     return zonedToDate(day, parseTime(rule.forceTime) ?? { hour: 0, minute: 0 }, rule.forceTimezone);
   }
@@ -158,7 +161,7 @@ export function wipeDatetime(rule: MapsRuleLike, day: CalendarDate, timezone: st
 }
 
 // Вайпы, которые ещё не наступили, в ближайшие `days` дней, по возрастанию времени.
-export function upcomingWipes<R extends MapsRuleLike>(rules: R[], timezone: string, now = new Date(), days = 8): Wipe<R>[] {
+export function upcomingWipes<R extends ScheduleRuleLike>(rules: R[], timezone: string, now = new Date(), days = 8): Wipe<R>[] {
   const start = addDays(today(timezone, now), -1);
   const result: Wipe<R>[] = [];
   for (let i = 0; i < days + 2; i++) {
@@ -187,7 +190,7 @@ export function isStagingWipe(wipeAt: Date, timezone: string): boolean {
 }
 
 // Глобальный вайп: в Pterodactyl нужно включить «Wipe Blueprints».
-export function isBlueprintWipe(rule: MapsRuleLike, wipeAt: Date, timezone: string): boolean {
+export function isBlueprintWipe(rule: ScheduleRuleLike, wipeAt: Date, timezone: string): boolean {
   const day = localDay(wipeAt, timezone);
   if (rule.bpFirstOfMonth && day.day <= 7) return true;
   if (rule.bpEveryDays > 0 && rule.bpAnchor) {
@@ -276,7 +279,8 @@ const httpsUrl = z
   .refine((v) => /^https?:\/\/[^\s/]+/.test(v), "Нужен адрес вида https://…")
   .transform((v) => v.replace(/\/+$/, ""));
 
-const clock = z.string().transform((v, ctx) => {
+// Время суток «ЧЧ:ММ»: принимает и «9:5», возвращает «09:05».
+export const clockSchema = z.string().transform((v, ctx) => {
   const t = parseTime(v);
   if (!t) {
     ctx.addIssue({ code: "custom", message: "Время — в формате ЧЧ:ММ" });
@@ -333,7 +337,7 @@ export const mapsRuleSchema = z
   .object({
     key: z.string().trim().regex(/^[a-z0-9_-]{1,20}$/, "Ключ правила — латиница в нижнем регистре, цифры, - и _ (до 20 символов)"),
     weekday: z.number().int().min(0).max(6),
-    time: clock,
+    time: clockSchema,
     serverIds: z.array(z.number().int().min(1).max(99)).min(1, "Выбери хотя бы один сервер"),
     pool: z.record(z.string().min(1).max(60), z.number().int().min(1, "В пуле — от 1 карты").max(7, "RustMaps генерирует не больше 7 карт одновременно")),
     template: z
@@ -341,7 +345,7 @@ export const mapsRuleSchema = z
       .refine((t) => "content" in t || "embeds" in t, "В шаблоне нужен content или embeds — это тело сообщения вебхука Discord")
       .refine((t) => JSON.stringify(t).length <= 6000, "Шаблон слишком большой для сообщения Discord"),
     forceTimezone: z.string().trim().refine(isValidTimeZone, "Неизвестный часовой пояс").nullable(),
-    forceTime: clock.nullable(),
+    forceTime: clockSchema.nullable(),
     bpFirstOfMonth: z.boolean(),
     bpEveryDays: z.number().int().min(0).max(365),
     bpAnchor: z.date().nullable(),

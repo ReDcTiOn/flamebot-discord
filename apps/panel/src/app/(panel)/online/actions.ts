@@ -17,6 +17,7 @@ import {
 } from "@flamebot/core";
 import { ActionError, audit, runAction, type ActionResult } from "@/lib/auth";
 import { bool, idParam, int, intOrNull, str } from "@/lib/form";
+import { telegramBotTakenBy } from "@/lib/telegramBots";
 
 const MODULE = "online";
 
@@ -137,17 +138,12 @@ export async function saveOnlineTelegram(_prev: ActionResult, fd: FormData): Pro
   });
 }
 
-// Номер бота из токена «123:AA…» или из подсказки «бот 123, …abcd».
-const telegramBotId = (v: string | null | undefined) => v?.match(/\d{5,15}/)?.[0] ?? null;
-
 export async function saveOnlineTelegramToken(_prev: ActionResult, fd: FormData): Promise<ActionResult> {
   return runAction("full", async (user) => {
     const token = telegramTokenSchema.parse(str(fd, "telegramToken"));
-    // Два бота не могут читать сообщения одного Telegram-бота: кнопки бота карт перестали бы работать.
-    const maps = await prisma.mapsSecret.findUnique({ where: { name: "telegramToken" } });
-    if (maps && telegramBotId(maps.hint) === telegramBotId(token)) {
-      throw new ActionError("Этот Telegram-бот уже подключён к боту карт. Для уведомлений создай отдельного бота в @BotFather.");
-    }
+    // Два модуля не могут читать сообщения одного Telegram-бота: у другого перестали бы работать кнопки.
+    const taken = await telegramBotTakenBy(token, "online");
+    if (taken) throw new ActionError(`Этот Telegram-бот уже подключён: ${taken}. Для уведомлений создай отдельного бота в @BotFather.`);
     const key = await botPublicKey();
     const hint = telegramTokenHint(token);
     const data = {

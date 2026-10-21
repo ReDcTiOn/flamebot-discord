@@ -17,7 +17,7 @@ read -r -p "Напиши yes: " answer
 
 docker compose up -d db
 ./deploy/backup.sh before-restore
-docker compose stop rating-bot online-bot giveaway-bot maps-bot panel
+docker compose stop rating-bot online-bot giveaway-bot maps-bot notice-bot panel
 # Схема очищается целиком: иначе таблицы, которых нет в копии (например, от более новой миграции),
 # остались бы и сломали следующее обновление. Всё в одной транзакции: при ошибке база не изменится.
 {

@@ -161,6 +161,8 @@ kbd {
 
 /* Старые обёртки, которые используются на части страниц */
 .card { background: var(--tile); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px 20px; margin-bottom: 16px; }
+/* Широкая таблица на телефоне прокручивается внутри карточки, а не растягивает страницу. */
+.card:has(> .table) { overflow-x: auto; }
 .card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 .card-head p { color: var(--text-secondary); font-size: 13px; margin-top: 3px; }
 .grid { display: grid; gap: 10px; }
@@ -541,3 +543,14 @@ a.member-link:hover { color: #7fb0ff; }
 }
 .emoji-grid button:hover { background: var(--surface-3); }
 .emoji-grid button[aria-pressed="true"] { background: var(--accent-bg); border-color: var(--accent); }
+
+/* ---------- Объявления о вайпах: превью постов ---------- */
+.post-preview { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 900px) { .post-preview { grid-template-columns: 1fr; } }
+.post-box { background: var(--tile); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; min-width: 0; }
+.post-box-head { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.dc-ping { color: #c9cdfb; background: rgba(88, 101, 242, 0.3); border-radius: 3px; padding: 0 3px; font-size: 13px; }
+.dc-embed { border-left: 4px solid var(--embed, #f9d71c); background: var(--surface-2); border-radius: 4px; padding: 10px 12px; margin-top: 6px; font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+.dc-embed-title { font-weight: 600; margin-bottom: 4px; }
+.vk-post { font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+.post-image { display: block; max-width: 100%; border-radius: 6px; margin-top: 8px; }

@@ -159,6 +159,33 @@ export const modules: PanelModule[] = [
       { title: "Журнал", items: [{ href: "/maps/events", label: "История", icon: "list" }] },
     ],
   },
+  {
+    key: "notices",
+    title: "Объявления о вайпах",
+    description: "Текст вайпа на подтверждение в Telegram и в панели, публикация в Discord и ВКонтакте, промокод в gamestores, план дня с напоминаниями",
+    icon: "megaphone",
+    color: "#e8a33d",
+    sections: [
+      { title: null, items: [{ href: "/notices", label: "Обзор", icon: "dashboard" }] },
+      {
+        title: "Объявления",
+        items: [
+          { href: "/notices/wipes", label: "Вайпы", icon: "megaphone" },
+          { href: "/notices/templates", label: "Тексты", icon: "message" },
+          { href: "/notices/agenda", label: "План дня", icon: "list" },
+        ],
+      },
+      {
+        title: "Настройки",
+        items: [
+          { href: "/notices/rules", label: "Расписание", icon: "clock" },
+          { href: "/notices/settings", label: "Настройки", icon: "layers" },
+          { href: "/notices/connection", label: "Подключение", icon: "plug", fullOnly: true },
+        ],
+      },
+      { title: "Журнал", items: [{ href: "/notices/events", label: "История", icon: "activity" }] },
+    ],
+  },
 ];
 
 export function moduleForPath(pathname: string): PanelModule | null {

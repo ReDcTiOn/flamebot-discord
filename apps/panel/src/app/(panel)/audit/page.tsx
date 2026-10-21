@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { prisma } from "@flamebot/core";
+import { NOTICE_ACTION_LABEL, prisma } from "@flamebot/core";
 import { ModalTrigger } from "@/components/ui/Modal";
 import { requirePage } from "@/lib/auth";
 import { MAPS_ACTION_LABEL } from "@/lib/maps";
@@ -57,6 +57,20 @@ const ACTIONS: Record<string, string> = {
   "maps.secret.clear": "Удалил ключ бота карт",
   // Задания боту карт: «maps.<действие>».
   ...Object.fromEntries(Object.entries(MAPS_ACTION_LABEL).map(([k, v]) => [`maps.${k}`, `Бот карт: ${v.toLowerCase()}`])),
+  "notices.settings": "Изменил настройки объявлений",
+  "notices.template.save": "Сохранил текст объявления",
+  "notices.template.delete": "Удалил текст объявления",
+  "notices.rule.save": "Сохранил правило расписания объявлений",
+  "notices.rule.delete": "Удалил правило расписания объявлений",
+  "notices.agenda": "Изменил план дня",
+  "notices.agenda.toggle": "Переключил план дня и напоминания",
+  "notices.reminder.save": "Сохранил напоминание",
+  "notices.reminder.delete": "Удалил напоминание",
+  "notices.image": "Заменил картинку объявления",
+  "notices.secrets": "Заменил ключи бота объявлений",
+  "notices.secret.clear": "Удалил ключ бота объявлений",
+  // Задания боту объявлений: «notices.<действие>».
+  ...Object.fromEntries(Object.entries(NOTICE_ACTION_LABEL).map(([k, v]) => [`notices.${k}`, `Бот объявлений: ${v.toLowerCase()}`])),
   "bot.start": "Запустил бота",
   "bot.stop": "Остановил бота",
   "card.update": "Изменил карточку профиля",

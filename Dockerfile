@@ -4,6 +4,7 @@
 #   online-bot — бот онлайна серверов
 #   giveaway-bot — бот розыгрышей
 #   maps-bot   — бот карт вайпов (RustMaps, S3, Discord, Pterodactyl, Telegram)
+#   notice-bot — бот объявлений о вайпах (Telegram, Discord, ВКонтакте, gamestores)
 #   panel      — веб-панель
 
 FROM node:22-alpine AS deps
@@ -15,6 +16,7 @@ COPY apps/rating-bot/package.json apps/rating-bot/
 COPY apps/online-bot/package.json apps/online-bot/
 COPY apps/giveaway-bot/package.json apps/giveaway-bot/
 COPY apps/maps-bot/package.json apps/maps-bot/
+COPY apps/notice-bot/package.json apps/notice-bot/
 COPY apps/panel/package.json apps/panel/
 RUN pnpm install --frozen-lockfile
 
@@ -27,7 +29,7 @@ COPY apps apps
 # Права файлов приходят из папки на сервере. Если git писал их со строгим umask (077), боты
 # под пользователем node не прочитают package.json ядра и упадут с ERR_MODULE_NOT_FOUND.
 RUN chmod -R a+rX package.json pnpm-workspace.yaml packages apps
-RUN pnpm -F @flamebot/core build && pnpm -F rating-bot build && pnpm -F online-bot build && pnpm -F giveaway-bot build && pnpm -F maps-bot build && pnpm -F panel build
+RUN pnpm -F @flamebot/core build && pnpm -F rating-bot build && pnpm -F online-bot build && pnpm -F giveaway-bot build && pnpm -F maps-bot build && pnpm -F notice-bot build && pnpm -F panel build
 
 FROM node:22-alpine AS rating-bot
 RUN apk add --no-cache openssl
@@ -95,6 +97,23 @@ RUN mkdir -p /data && chown node:node /data && chmod 700 /data
 ENV BOT_DATA_DIR=/data
 USER node
 WORKDIR /app/apps/maps-bot
+CMD ["node", "dist/index.js"]
+
+FROM node:22-alpine AS notice-bot
+RUN apk add --no-cache openssl
+ENV NODE_ENV=production
+WORKDIR /app
+COPY --from=build /app/package.json /app/pnpm-workspace.yaml ./
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/packages/core ./packages/core
+COPY --from=build /app/apps/notice-bot/package.json ./apps/notice-bot/package.json
+COPY --from=build /app/apps/notice-bot/node_modules ./apps/notice-bot/node_modules
+COPY --from=build /app/apps/notice-bot/dist ./apps/notice-bot/dist
+# Том бота: здесь лежит его ключ шифрования секретов.
+RUN mkdir -p /data && chown node:node /data && chmod 700 /data
+ENV BOT_DATA_DIR=/data
+USER node
+WORKDIR /app/apps/notice-bot
 CMD ["node", "dist/index.js"]
 
 FROM node:22-alpine AS panel
