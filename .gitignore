@@ -19,3 +19,6 @@ backups/
 
 # Блокировка deploy/update.sh
 .deploy.lock
+
+# Граф кода Graphify: локальный, пересобирается командой graphify update .
+graphify-out/
