@@ -1,10 +1,17 @@
 import { prisma, type GiveawayStatus } from "@flamebot/core";
 
-export const GIVEAWAY_STATUS: Record<GiveawayStatus, { label: string; chip: string }> = {
+const GIVEAWAY_STATUS: Record<GiveawayStatus, { label: string; chip: string }> = {
   ACTIVE: { label: "Идёт", chip: "chip success" },
   ENDED: { label: "Завершён", chip: "chip" },
   CANCELLED: { label: "Отменён", chip: "chip danger" },
 };
+
+// Статус для панели. Розыгрыш из панели сначала ждёт, пока бот отправит его в канал.
+export function giveawayStatus(g: { status: GiveawayStatus; needsPublish: boolean; publishError: string | null }): { label: string; chip: string } {
+  if (g.status === "ACTIVE" && g.needsPublish) return { label: "Ждёт публикации", chip: "chip warn" };
+  if (g.status === "CANCELLED" && g.publishError) return { label: "Не опубликован", chip: "chip danger" };
+  return GIVEAWAY_STATUS[g.status];
+}
 
 // Имена людей по Discord ID. Бот розыгрышей имён не хранит, поэтому берём их из таблицы
 // игроков рейтинга: там есть все, кто писал в чат. Остальные показываются по ID.

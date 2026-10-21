@@ -162,6 +162,16 @@ export function parseCodes(text: string): string[] {
     .filter(Boolean);
 }
 
+// Что не так с промокодами: по одному на победителя, без повторов. null — всё в порядке.
+export function promoCodesProblem(codes: string[], winners: number): string | null {
+  if (codes.length !== winners) {
+    return `Победителей ${winners}, значит нужно ${winners} ${plural(winners, "промокод", "промокода", "промокодов")}, а вставлено ${codes.length}.`;
+  }
+  if (new Set(codes).size !== codes.length) return "Среди промокодов есть повторы.";
+  if (codes.some((c) => c.length > 100)) return "Промокод не может быть длиннее 100 символов.";
+  return null;
+}
+
 const pad = (n: number) => String(n).padStart(2, "0");
 export const formatDate = (d: CalendarDate) => `${pad(d.day)}.${pad(d.month)}.${d.year}`;
 export const formatTime = (t: ClockTime) => `${pad(t.hour)}:${pad(t.minute)}`;

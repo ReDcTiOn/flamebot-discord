@@ -322,12 +322,17 @@ model Giveaway {
   winners      String[]       @default([])
   // Панель ставит флаг, когда отменяет розыгрыш; бот перерисовывает сообщение в канале.
   needsMessageUpdate Boolean  @default(false)
+  // Розыгрыш создан в панели и ждёт, пока бот отправит его в канал (у панели нет токена).
+  needsPublish Boolean        @default(false)
+  // Почему бот не смог опубликовать розыгрыш из панели. Показывается на странице розыгрыша.
+  publishError String?
   entries      GiveawayEntry[]
   promoCodes   GiveawayPromoCode[]
   createdAt    DateTime       @default(now())
 
   @@index([status, endsAt])
   @@index([needsMessageUpdate])
+  @@index([needsPublish])
 }
 
 model GiveawayEntry {

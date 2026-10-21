@@ -8,6 +8,7 @@ import {
   parseDate,
   parseTime,
   plural,
+  promoCodesProblem,
   today,
   weekday,
   zonedParts,
@@ -80,6 +81,13 @@ describe("розыгрыши: тексты и настройки", () => {
 
   it("разбирает промокоды столбиком", () => {
     assert.deepEqual(parseCodes("  A1 \r\n\nB2\n  \nC3"), ["A1", "B2", "C3"]);
+  });
+
+  it("проверяет промокоды: по одному на победителя, без повторов", () => {
+    assert.equal(promoCodesProblem(["A", "B"], 2), null);
+    assert.match(promoCodesProblem(["A"], 2) ?? "", /нужно 2 промокода, а вставлено 1/);
+    assert.equal(promoCodesProblem(["A", "A"], 2), "Среди промокодов есть повторы.");
+    assert.match(promoCodesProblem(["x".repeat(101)], 1) ?? "", /длиннее 100/);
   });
 
   it("проверяет настройки", () => {

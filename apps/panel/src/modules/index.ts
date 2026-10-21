@@ -53,7 +53,8 @@ export type IconName =
   | "activity"
   | "gift"
   | "ticket"
-  | "plug";
+  | "plug"
+  | "plus";
 
 export const modules: PanelModule[] = [
   {
@@ -119,7 +120,10 @@ export const modules: PanelModule[] = [
       { title: null, items: [{ href: "/giveaway", label: "Обзор", icon: "dashboard" }] },
       {
         title: "Розыгрыши",
-        items: [{ href: "/giveaway/list", label: "Все розыгрыши", icon: "gift" }],
+        items: [
+          { href: "/giveaway/new", label: "Новый розыгрыш", icon: "plus" },
+          { href: "/giveaway/list", label: "Все розыгрыши", icon: "gift" },
+        ],
       },
       {
         title: "Настройки",

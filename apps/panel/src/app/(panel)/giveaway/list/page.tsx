@@ -1,8 +1,9 @@
 import Link from "next/link";
+import { Plus } from "lucide-react";
 import { formatInZone, formatNumber, getGiveawaySettings, prisma, type GiveawayStatus, type Prisma } from "@flamebot/core";
 import { EmptyState, PageHead } from "@/components/Fields";
 import { requirePage } from "@/lib/auth";
-import { GIVEAWAY_STATUS } from "@/lib/giveaways";
+import { giveawayStatus } from "@/lib/giveaways";
 
 export const metadata = { title: "Все розыгрыши" };
 
@@ -46,7 +47,11 @@ export default async function GiveawayListPage({ searchParams }: { searchParams:
 
   return (
     <>
-      <PageHead title="Все розыгрыши" hint={`Время итогов — ${settings.timezoneLabel}. Нажми на розыгрыш, чтобы увидеть участников, победителей и промокоды.`} />
+      <PageHead title="Все розыгрыши" hint={`Время итогов — ${settings.timezoneLabel}. Нажми на розыгрыш, чтобы увидеть участников, победителей и промокоды.`}>
+        <Link href="/giveaway/new" className="btn primary">
+          <Plus size={15} aria-hidden="true" /> Новый розыгрыш
+        </Link>
+      </PageHead>
 
       <form method="get" className="toolbar-row">
         <input type="search" name="q" defaultValue={q} placeholder="Приз или номер розыгрыша" maxLength={64} aria-label="Поиск розыгрыша" />
@@ -66,7 +71,7 @@ export default async function GiveawayListPage({ searchParams }: { searchParams:
         <EmptyState
           icon="gift"
           title={q || filter !== "all" ? "Ничего не нашли" : "Розыгрышей пока не было"}
-          hint={q || filter !== "all" ? "Попробуй изменить поиск или фильтр." : "Создай первый в Discord: /розыгрыш создать."}
+          hint={q || filter !== "all" ? "Попробуй изменить поиск или фильтр." : "Нажми «Новый розыгрыш» или создай его в Discord: /розыгрыш создать."}
         />
       ) : (
         <div className="card" style={{ padding: "8px 8px 12px" }}>
@@ -88,7 +93,7 @@ export default async function GiveawayListPage({ searchParams }: { searchParams:
                     <Link href={`/giveaway/${g.id}`} className="member-link">#{g.id} · {g.prize}</Link>{" "}
                     {g.boostersOnly && <span className="chip">🚀</span>} {g._count.promoCodes > 0 && <span className="chip">🎟</span>}
                   </td>
-                  <td><span className={GIVEAWAY_STATUS[g.status].chip}>{GIVEAWAY_STATUS[g.status].label}</span></td>
+                  <td><span className={giveawayStatus(g).chip}>{giveawayStatus(g).label}</span></td>
                   <td className="secondary" style={{ whiteSpace: "nowrap" }}>{formatInZone(g.endsAt, settings.timezone)}</td>
                   <td className="num">{formatNumber(g._count.entries)}</td>
                   <td className="num">{g.status === "ENDED" ? `${g.winners.length} / ${g.winnersCount}` : g.winnersCount}</td>

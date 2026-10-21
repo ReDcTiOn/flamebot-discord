@@ -7,7 +7,6 @@ import {
   EmbedBuilder,
   MessageFlags,
   ModalBuilder,
-  PermissionFlagsBits,
   TextInputBuilder,
   TextInputStyle,
   escapeMarkdown,
@@ -34,6 +33,7 @@ import {
   parseTime,
   plural,
   prisma,
+  promoCodesProblem,
   today as todayIn,
   weekday,
   zonedParts,
@@ -56,6 +56,7 @@ import {
   joinRow,
   jumpUrl,
   loadGiveaway,
+  missingPermissions,
   promoReport,
   sendPromos,
   updateMessage,
@@ -131,18 +132,7 @@ async function checkChannel(interaction: RepliableInteraction<"cached">, target:
     await error(interaction, "Здесь нельзя создать розыгрыш - укажи текстовый канал в параметре «канал».");
     return null;
   }
-  const me = interaction.guild.members.me;
-  const perms = me ? target.permissionsFor(me) : null;
-  const missing = (
-    [
-      ["Просматривать канал", PermissionFlagsBits.ViewChannel],
-      ["Отправлять сообщения", PermissionFlagsBits.SendMessages],
-      ["Встраивать ссылки", PermissionFlagsBits.EmbedLinks],
-      ["Читать историю сообщений", PermissionFlagsBits.ReadMessageHistory],
-    ] as const
-  )
-    .filter(([, flag]) => !perms?.has(flag))
-    .map(([name]) => name);
+  const missing = missingPermissions(target);
   if (missing.length > 0) {
     await error(interaction, `У бота не хватает прав в ${target.toString()}: ${missing.join(", ")}.`);
     return null;
@@ -263,6 +253,7 @@ async function end(interaction: ChatInputCommandInteraction<"cached">) {
   const id = interaction.options.getInteger("розыгрыш", true);
   const g = await loadGiveaway({ id });
   if (!g || g.status !== "ACTIVE") return error(interaction, "Активный розыгрыш с таким номером не найден.");
+  if (g.needsPublish) return error(interaction, "Этот розыгрыш создан в панели и ещё не опубликован в канале.");
   await interaction.deferReply({ flags: ephemeral });
   const done = await finish(interaction.guild, g.id, { notifyHost: false, byId: interaction.user.id });
   if (!done) {
@@ -332,7 +323,7 @@ async function cancel(interaction: ChatInputCommandInteraction<"cached">) {
 
 async function list(interaction: ChatInputCommandInteraction<"cached">) {
   const items = await prisma.giveaway.findMany({
-    where: { status: "ACTIVE" },
+    where: { status: "ACTIVE", needsPublish: false },
     orderBy: { endsAt: "asc" },
     take: 25,
     include: { _count: { select: { entries: true, promoCodes: true } } },
@@ -436,15 +427,7 @@ async function submitPromo(interaction: ModalSubmitInteraction<"cached">, draftI
   }
   d.previous = interaction.fields.getTextInputValue("codes");
   const codes = parseCodes(d.previous);
-  const n = d.winners;
-  let problem: string | null = null;
-  if (codes.length !== n) {
-    problem = `Победителей ${n}, значит нужно ${n} ${plural(n, "промокод", "промокода", "промокодов")}, а вставлено ${codes.length}.`;
-  } else if (new Set(codes).size !== codes.length) {
-    problem = "Среди промокодов есть повторы.";
-  } else if (codes.some((c) => c.length > 100)) {
-    problem = "Промокод не может быть длиннее 100 символов.";
-  }
+  const problem = promoCodesProblem(codes, d.winners);
   if (problem) {
     await interaction.reply({
       content: `⚠️ ${problem}`,
@@ -519,7 +502,7 @@ async function timeChoices(current: string, dateText: string | null) {
 async function giveawayChoices(current: string, status: GiveawayStatus, promoOnly = false) {
   const s = await getSettings();
   const rows = await prisma.giveaway.findMany({
-    where: { status, ...(promoOnly ? { promoCodes: { some: {} } } : {}) },
+    where: { status, needsPublish: false, ...(promoOnly ? { promoCodes: { some: {} } } : {}) },
     orderBy: { endsAt: status === "ACTIVE" ? "asc" : "desc" },
     take: 100,
   });

@@ -3,10 +3,11 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { formatInZone, formatNumber, getGiveawaySettings, plural, prisma } from "@flamebot/core";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
+import { AutoRefresh } from "@/components/AutoRefresh";
 import { DangerZone, EmptyState, Section } from "@/components/Fields";
 import { requirePage } from "@/lib/auth";
 import { env } from "@/lib/env";
-import { GIVEAWAY_STATUS, channelNames, memberNames, relative } from "@/lib/giveaways";
+import { channelNames, giveawayStatus, memberNames, relative } from "@/lib/giveaways";
 import { cancelGiveaway, finishGiveawayNow } from "../actions";
 
 export const metadata = { title: "Розыгрыш" };
@@ -44,7 +45,7 @@ export default async function GiveawayPage({ params }: { params: Promise<{ id: s
     ) : (
       <span className="muted">{uid}</span>
     );
-  const status = GIVEAWAY_STATUS[g.status];
+  const status = giveawayStatus(g);
   const winners = new Set(g.winners);
   // Промокоды стоят денег: сами коды видят только администраторы сервера.
   const showCodes = user.level === "full";
@@ -73,7 +74,22 @@ export default async function GiveawayPage({ params }: { params: Promise<{ id: s
             </a>
           </div>
         )}
+        {g.needsPublish && (
+          <div className="row-actions">
+            <AutoRefresh seconds={5} />
+          </div>
+        )}
       </div>
+
+      {g.needsPublish && (
+        <p className="notice">
+          Розыгрыш создан в панели. Бот отправит его в канал в течение 10 секунд после создания, если он запущен.
+          {g.publishError ? ` Последняя попытка: ${g.publishError}.` : ""}
+        </p>
+      )}
+      {!g.needsPublish && g.status === "CANCELLED" && g.publishError && (
+        <p className="notice warn">Бот не смог опубликовать розыгрыш: {g.publishError}. Создай его заново.</p>
+      )}
 
       <div className="grid grid-4" style={{ marginBottom: 10 }}>
         <div className="metric"><div className="metric-label">Участников</div><div className="metric-value">{formatNumber(g._count.entries)}</div></div>
@@ -155,7 +171,7 @@ export default async function GiveawayPage({ params }: { params: Promise<{ id: s
 
       {g.status === "ACTIVE" && (
         <Section title="Управление">
-          <DangerZone
+          {!g.needsPublish && <DangerZone
             title="Подвести итоги сейчас"
             action={
               <ActionForm
@@ -170,7 +186,7 @@ export default async function GiveawayPage({ params }: { params: Promise<{ id: s
             }
           >
             Бот выберет победителей прямо сейчас, как будто время итогов уже наступило{g.promoCodes.length > 0 ? ", и разошлёт промокоды" : ""}.
-          </DangerZone>
+          </DangerZone>}
           <DangerZone
             title="Отменить розыгрыш"
             action={

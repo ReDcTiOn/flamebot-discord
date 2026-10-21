@@ -37,6 +37,7 @@ const ACTIONS: Record<string, string> = {
   "online.server.delete": "Удалил сервер",
   "online.settings": "Изменил настройки онлайна",
   "giveaway.settings": "Изменил настройки розыгрышей",
+  "giveaway.create": "Создал розыгрыш",
   "giveaway.finish": "Досрочно подвёл итоги розыгрыша",
   "giveaway.cancel": "Отменил розыгрыш",
   "bot.start": "Запустил бота",

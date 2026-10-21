@@ -7,6 +7,7 @@ import {
   DiscordAPIError,
   EmbedBuilder,
   MessageFlags,
+  PermissionFlagsBits,
   RESTJSONErrorCodes,
   escapeMarkdown,
   type Guild,
@@ -14,7 +15,7 @@ import {
   type GuildTextBasedChannel,
   type MessageActionRowComponentBuilder,
 } from "discord.js";
-import { prisma, renderTemplate, type Giveaway, type GiveawayPromoCode } from "@flamebot/core";
+import { formatInZone, plural, prisma, renderTemplate, type Giveaway, type GiveawayPromoCode } from "@flamebot/core";
 import { event, log } from "./events.js";
 import { getSettings, mentions, unix, withLock } from "./util.js";
 
@@ -81,6 +82,22 @@ export function buildEmbed(g: GiveawayFull, guild: Guild): EmbedBuilder {
 }
 
 const isCode = (err: unknown, code: number) => err instanceof DiscordAPIError && err.code === code;
+
+// Каких прав не хватает боту, чтобы отправить розыгрыш в канал.
+export function missingPermissions(channel: GuildTextBasedChannel): string[] {
+  const me = channel.guild.members.me;
+  const perms = me ? channel.permissionsFor(me) : null;
+  return (
+    [
+      ["Просматривать канал", PermissionFlagsBits.ViewChannel],
+      ["Отправлять сообщения", PermissionFlagsBits.SendMessages],
+      ["Встраивать ссылки", PermissionFlagsBits.EmbedLinks],
+      ["Читать историю сообщений", PermissionFlagsBits.ReadMessageHistory],
+    ] as const
+  )
+    .filter(([, flag]) => !perms?.has(flag))
+    .map(([name]) => name);
+}
 
 export async function resolveChannel(guild: Guild, channelId: string): Promise<GuildTextBasedChannel | null> {
   const channel = guild.channels.cache.get(channelId) ?? (await guild.client.channels.fetch(channelId).catch(() => null));
@@ -280,8 +297,54 @@ export async function finish(guild: Guild, id: number, { notifyHost = true, byId
 }
 
 // Фоновая задача: подведение итогов, обновление счётчиков и сообщений, изменённых из панели.
+// Отменяет розыгрыш из панели, который не получилось опубликовать, и сохраняет причину для панели.
+async function failPublish(g: Giveaway, reason: string): Promise<void> {
+  await prisma.giveaway.updateMany({ where: { id: g.id, status: "ACTIVE" }, data: { status: "CANCELLED", needsPublish: false, publishError: reason } });
+  event("giveaway.publish_failed", `Розыгрыш #${g.id} «${g.prize}» из панели не опубликован: ${reason}`, {
+    level: "WARN",
+    memberId: g.hostId,
+    details: { giveawayId: g.id, channelId: g.channelId },
+  });
+}
+
+// Публикует розыгрыши, созданные в панели: у панели нет токена, поэтому сообщение в канал отправляет бот.
+async function publishPending(guild: Guild): Promise<void> {
+  const pending = await prisma.giveaway.findMany({ where: { needsPublish: true, status: "ACTIVE" }, orderBy: { id: "asc" }, take: 10 });
+  for (const row of pending) {
+    await withLock(`giveaway:${row.id}`, async () => {
+      const g = await loadGiveaway({ id: row.id });
+      if (!g || !g.needsPublish || g.status !== "ACTIVE") return;
+      // Бот был выключен, и время итогов прошло раньше, чем розыгрыш успели показать участникам.
+      if (g.endsAt.getTime() <= Date.now() + 60_000) return failPublish(g, "время итогов прошло раньше, чем бот успел отправить розыгрыш в канал");
+      const channel = await resolveChannel(guild, g.channelId);
+      if (!channel) return failPublish(g, "канал не найден или в него нельзя писать текстом");
+      const missing = missingPermissions(channel);
+      if (missing.length > 0) return failPublish(g, `боту не хватает прав в #${channel.name}: ${missing.join(", ")}`);
+
+      let messageId: string;
+      try {
+        messageId = (await channel.send({ embeds: [buildEmbed(g, guild)], components: [joinRow()] })).id;
+      } catch (err) {
+        // Сбой Discord может быть временным: оставляем розыгрыш в очереди, бот попробует снова.
+        await prisma.giveaway.update({ where: { id: g.id }, data: { publishError: "Discord не принял сообщение, бот попробует ещё раз" } });
+        log.warn(`Не удалось опубликовать розыгрыш #${g.id} из панели`, err);
+        return;
+      }
+      await prisma.giveaway.update({ where: { id: g.id }, data: { messageId, needsPublish: false, publishError: null } });
+      const { timezone } = await getSettings();
+      event("giveaway.created", `Опубликован розыгрыш #${g.id} «${g.prize}» из панели: ${g.winnersCount} ${plural(g.winnersCount, "победитель", "победителя", "победителей")}, итоги ${formatInZone(g.endsAt, timezone)}`, {
+        memberId: g.hostId,
+        details: { giveawayId: g.id, channelId: g.channelId, winners: g.winnersCount, endsAt: g.endsAt.toISOString(), boostersOnly: g.boostersOnly, fromPanel: true },
+      });
+    });
+  }
+}
+
 export async function tick(guild: Guild): Promise<void> {
-  const due = await prisma.giveaway.findMany({ where: { status: "ACTIVE", endsAt: { lte: new Date() } }, select: { id: true } });
+  await publishPending(guild);
+
+  // Неопубликованные розыгрыши не подводим: их ещё никто не видел.
+  const due = await prisma.giveaway.findMany({ where: { status: "ACTIVE", needsPublish: false, endsAt: { lte: new Date() } }, select: { id: true } });
   for (const { id } of due) {
     try {
       await finish(guild, id);

@@ -14,6 +14,7 @@ import {
   Mic,
   Package,
   Palette,
+  Plus,
   Plug,
   Repeat,
   Ruler,
@@ -55,6 +56,7 @@ const ICONS: Record<IconName, LucideIcon> = {
   activity: Activity,
   gift: Gift,
   ticket: Ticket,
+  plus: Plus,
   plug: Plug,
 };
 

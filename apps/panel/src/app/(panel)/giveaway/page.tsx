@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Plus } from "lucide-react";
 import { formatInZone, formatNumber, getGiveawaySettings, plural, prisma } from "@flamebot/core";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { BotPower } from "@/components/BotPower";
@@ -34,8 +35,11 @@ export default async function GiveawayOverview() {
 
   return (
     <>
-      <PageHead title="Розыгрыши" hint={`Время итогов — ${settings.timezoneLabel} (${tz}). Создаются розыгрыши командой /розыгрыш в Discord.`}>
+      <PageHead title="Розыгрыши" hint={`Время итогов — ${settings.timezoneLabel} (${tz}). Создать розыгрыш можно здесь или командой /розыгрыш в Discord.`}>
         <div className="head-actions">
+          <Link href="/giveaway/new" className="btn primary">
+            <Plus size={15} aria-hidden="true" /> Новый розыгрыш
+          </Link>
           <AutoRefresh seconds={10} />
           <BotPower botKey="giveaway" title="Розыгрыши" state={botState} canControl={user.level === "full"} />
         </div>
@@ -77,7 +81,7 @@ export default async function GiveawayOverview() {
 
       <Section title="Идут сейчас" hint="Итоги бот подводит сам в назначенное время. Досрочно завершить или отменить можно на странице розыгрыша.">
         {active.length === 0 ? (
-          <EmptyState icon="gift" title="Активных розыгрышей нет" hint="Создай розыгрыш в Discord: /розыгрыш создать или /розыгрыш быстрый." />
+          <EmptyState icon="gift" title="Активных розыгрышей нет" hint="Нажми «Новый розыгрыш» или создай его в Discord: /розыгрыш создать." />
         ) : (
           <div className="card" style={{ padding: "8px 8px 4px" }}>
             <table className="table">
@@ -96,7 +100,8 @@ export default async function GiveawayOverview() {
                     <td>
                       <Link href={`/giveaway/${g.id}`} className="member-link">#{g.id} · {g.prize}</Link>{" "}
                       {g.boostersOnly && <span className="chip">🚀 бустеры</span>}{" "}
-                      {g._count.promoCodes > 0 && <span className="chip">🎟 промокоды</span>}
+                      {g._count.promoCodes > 0 && <span className="chip">🎟 промокоды</span>}{" "}
+                      {g.needsPublish && <span className="chip warn">ждёт публикации</span>}
                     </td>
                     <td>
                       {formatInZone(g.endsAt, tz)} <span className="muted">· {relative(g.endsAt)}</span>
