@@ -48,7 +48,9 @@ export type IconName =
   | "search"
   | "image"
   | "server"
-  | "activity";
+  | "activity"
+  | "gift"
+  | "ticket";
 
 export const modules: PanelModule[] = [
   {
@@ -101,6 +103,22 @@ export const modules: PanelModule[] = [
         ],
       },
       { title: "Журнал", items: [{ href: "/online/events", label: "История", icon: "list" }] },
+    ],
+  },
+  {
+    key: "giveaway",
+    title: "Розыгрыши",
+    description: "Розыгрыши с кнопкой «Участвовать», итоги по расписанию и промокоды победителям в ЛС",
+    icon: "gift",
+    color: "#ff5a1f",
+    sections: [
+      { title: null, items: [{ href: "/giveaway", label: "Обзор", icon: "dashboard" }] },
+      {
+        title: "Розыгрыши",
+        items: [{ href: "/giveaway/list", label: "Все розыгрыши", icon: "gift" }],
+      },
+      { title: "Настройки", items: [{ href: "/giveaway/settings", label: "Настройки", icon: "layers" }] },
+      { title: "Журнал", items: [{ href: "/giveaway/events", label: "История", icon: "list" }] },
     ],
   },
 ];

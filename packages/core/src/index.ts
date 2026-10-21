@@ -25,6 +25,11 @@ export type {
   OnlineServerStatus,
   OnlineSettings,
   OnlineState,
+  GiveawaySettings,
+  Giveaway,
+  GiveawayEntry,
+  GiveawayPromoCode,
+  GiveawayStatus,
   EventLevel,
   CardAsset,
   AuditLog,
@@ -35,3 +40,4 @@ export * from "./events.js";
 export * from "./secrets.js";
 export * from "./online.js";
 export * from "./control.js";
+export * from "./giveaways.js";

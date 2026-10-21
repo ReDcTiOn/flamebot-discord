@@ -73,6 +73,21 @@ services:
         condition: service_completed_successfully
     networks: [internal, egress]
 
+  giveaway-bot:
+    <<: *hardening
+    build:
+      context: .
+      target: giveaway-bot
+    environment:
+      # Токен отдельного приложения Discord. Пока он не задан, бот ждёт и показывает ошибку в панели.
+      GIVEAWAY_DISCORD_TOKEN: ${GIVEAWAY_DISCORD_TOKEN:-}
+      GUILD_ID: ${GUILD_ID}
+      DATABASE_URL: postgresql://flamebot:${POSTGRES_PASSWORD}@db:5432/flamebot
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks: [internal, egress]
+
   panel:
     <<: *hardening
     build:

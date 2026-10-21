@@ -20,5 +20,8 @@ backups/
 # Блокировка deploy/update.sh
 .deploy.lock
 
+# Боты, присланные для переноса в систему: в них бывают токены и базы с промокодами.
+imported_bots/
+
 # Граф кода Graphify: локальный, пересобирается командой graphify update .
 graphify-out/

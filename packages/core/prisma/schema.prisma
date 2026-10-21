@@ -281,6 +281,78 @@ model OnlineServerStatus {
   updatedAt   DateTime     @updatedAt
 }
 
+// ===================== Бот розыгрышей (модуль "giveaway") =====================
+
+// Единственная строка с id = 1.
+model GiveawaySettings {
+  id            Int     @id @default(1)
+  // Часовой пояс, в котором админы вводят дату и время итогов (IANA, например Asia/Vladivostok).
+  timezone      String  @default("Asia/Vladivostok")
+  timezoneLabel String  @default("Владивосток")
+  // Сообщение победителю в ЛС. {prize} — приз, {code} — промокод.
+  promoDmText   String  @default("Привет!\nТы победил в розыгрыше **«{prize}»** в дискорд канале **[FlameRust](https://discord.flamerust.ru)**!\n\n**Твой промокод: {code}**\n\nАктивировать его можно на нашем сайте [FlameRust.GG](https://flamerust.gg) в профиле.\nСрок действия промокода: 1 неделя\n\nСпасибо что играешь на наших серверах!")
+  // Команда «/розыгрыш быстрый»: после неё остаётся только ввести промокоды.
+  quickPrize        String  @default("Промокод на 50 рублей")
+  quickWinners      Int     @default(5)
+  // 0 — сегодня, 1 — завтра, 2 — послезавтра...
+  quickDaysAhead    Int     @default(1)
+  quickTime         String  @default("23:00")
+  quickBoostersOnly Boolean @default(false)
+  updatedAt     DateTime @updatedAt
+}
+
+enum GiveawayStatus {
+  ACTIVE
+  ENDED
+  CANCELLED
+}
+
+model Giveaway {
+  id           Int            @id @default(autoincrement())
+  channelId    String
+  messageId    String?        @unique
+  hostId       String
+  prize        String
+  description  String?
+  winnersCount Int
+  // Время итогов. После завершения — когда итоги подведены на самом деле.
+  endsAt       DateTime
+  boostersOnly Boolean        @default(false)
+  status       GiveawayStatus @default(ACTIVE)
+  winners      String[]       @default([])
+  // Панель ставит флаг, когда отменяет розыгрыш; бот перерисовывает сообщение в канале.
+  needsMessageUpdate Boolean  @default(false)
+  entries      GiveawayEntry[]
+  promoCodes   GiveawayPromoCode[]
+  createdAt    DateTime       @default(now())
+
+  @@index([status, endsAt])
+  @@index([needsMessageUpdate])
+}
+
+model GiveawayEntry {
+  giveawayId Int
+  userId     String
+  giveaway   Giveaway @relation(fields: [giveawayId], references: [id], onDelete: Cascade)
+  joinedAt   DateTime @default(now())
+
+  @@id([giveawayId, userId])
+}
+
+// Промокоды победителям: по одному на победителя, приходят в ЛС.
+model GiveawayPromoCode {
+  id         Int      @id @default(autoincrement())
+  giveawayId Int
+  giveaway   Giveaway @relation(fields: [giveawayId], references: [id], onDelete: Cascade)
+  code       String
+  // Кому выдан. null — ещё не выдан.
+  userId     String?
+  // Дошло ли сообщение в ЛС.
+  dmSent     Boolean  @default(false)
+
+  @@index([giveawayId])
+}
+
 // ===================== Платформа: общие данные сервера =====================
 
 // Открытые ключи ботов для шифрования секретов. Приватные ключи есть только у ботов.

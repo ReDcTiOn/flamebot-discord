@@ -2,6 +2,7 @@ import {
   Activity,
   Clock,
   Coins,
+  Gift,
   Hash,
   House,
   Image as ImageIcon,
@@ -19,6 +20,7 @@ import {
   Server,
   Shield,
   Store,
+  Ticket,
   ThumbsUp,
   TrendingUp,
   Users,
@@ -50,6 +52,8 @@ const ICONS: Record<IconName, LucideIcon> = {
   image: ImageIcon,
   server: Server,
   activity: Activity,
+  gift: Gift,
+  ticket: Ticket,
 };
 
 export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {

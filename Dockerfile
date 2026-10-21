@@ -2,6 +2,7 @@
 #   build      — сборка всего; используется и для миграций
 #   rating-bot — рейтинг-бот
 #   online-bot — бот онлайна серверов
+#   giveaway-bot — бот розыгрышей
 #   panel      — веб-панель
 
 FROM node:22-alpine AS deps
@@ -11,6 +12,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY packages/core/package.json packages/core/
 COPY apps/rating-bot/package.json apps/rating-bot/
 COPY apps/online-bot/package.json apps/online-bot/
+COPY apps/giveaway-bot/package.json apps/giveaway-bot/
 COPY apps/panel/package.json apps/panel/
 RUN pnpm install --frozen-lockfile
 
@@ -20,7 +22,7 @@ ENV DATABASE_URL=postgresql://build:build@localhost:5432/build
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY packages packages
 COPY apps apps
-RUN pnpm -F @flamebot/core build && pnpm -F rating-bot build && pnpm -F online-bot build && pnpm -F panel build
+RUN pnpm -F @flamebot/core build && pnpm -F rating-bot build && pnpm -F online-bot build && pnpm -F giveaway-bot build && pnpm -F panel build
 
 FROM node:22-alpine AS rating-bot
 RUN apk add --no-cache openssl
@@ -48,6 +50,20 @@ COPY --from=build /app/apps/online-bot/node_modules ./apps/online-bot/node_modul
 COPY --from=build /app/apps/online-bot/dist ./apps/online-bot/dist
 USER node
 WORKDIR /app/apps/online-bot
+CMD ["node", "dist/index.js"]
+
+FROM node:22-alpine AS giveaway-bot
+RUN apk add --no-cache openssl
+ENV NODE_ENV=production
+WORKDIR /app
+COPY --from=build /app/package.json /app/pnpm-workspace.yaml ./
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/packages/core ./packages/core
+COPY --from=build /app/apps/giveaway-bot/package.json ./apps/giveaway-bot/package.json
+COPY --from=build /app/apps/giveaway-bot/node_modules ./apps/giveaway-bot/node_modules
+COPY --from=build /app/apps/giveaway-bot/dist ./apps/giveaway-bot/dist
+USER node
+WORKDIR /app/apps/giveaway-bot
 CMD ["node", "dist/index.js"]
 
 FROM node:22-alpine AS panel

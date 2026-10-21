@@ -6,7 +6,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "pnpm -F @flamebot/core build && pnpm -F rating-bot build && pnpm -F online-bot build && pnpm -F panel build",
+    "build": "pnpm -F @flamebot/core build && pnpm -F rating-bot build && pnpm -F online-bot build && pnpm -F giveaway-bot build && pnpm -F panel build",
     "typecheck": "pnpm -F @flamebot/core build && pnpm -r typecheck",
     "test": "pnpm -F @flamebot/core test",
     "db:generate": "pnpm -F @flamebot/core db:generate",
@@ -15,7 +15,8 @@
     "dev:rating-bot": "pnpm -F @flamebot/core build && pnpm -F rating-bot dev",
     "dev:panel": "pnpm -F @flamebot/core build && pnpm -F panel dev",
     "deploy-commands": "pnpm -F rating-bot deploy-commands",
-    "dev:online-bot": "pnpm -F @flamebot/core build && pnpm -F online-bot dev"
+    "dev:online-bot": "pnpm -F @flamebot/core build && pnpm -F online-bot dev",
+    "dev:giveaway-bot": "pnpm -F @flamebot/core build && pnpm -F giveaway-bot dev"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

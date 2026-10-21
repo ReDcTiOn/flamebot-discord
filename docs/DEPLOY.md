@@ -53,6 +53,8 @@ nano .env
 
 - `DISCORD_TOKEN`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `GUILD_ID` — как у тебя на ПК.
 - `ONLINE_SECRET_KEY` — **тот же, что на ПК**, если переносишь базу: иначе бот онлайна не прочитает сохранённые пароли RCON.
+- `GIVEAWAY_DISCORD_TOKEN` — токен бота розыгрышей. Один токен — одна работающая копия: если бот запущен
+  и на ПК, и на сервере, обе копии будут подводить итоги. Перед запуском на сервере останови его на ПК.
 - `PANEL_URL=https://bots.flamerust.gg`, `TRUST_PROXY=true`.
 - `COMPOSE_PROJECT_NAME=flamebot`, `PANEL_PORT=3000`.
 - `POSTGRES_PASSWORD` и `SESSION_SECRET` — новые: `openssl rand -hex 24` и `openssl rand -hex 32`.
@@ -131,7 +133,7 @@ sudo journalctl -u caddy -f           # ждём «certificate obtained successf
 На ПК (Git Bash, в папке проекта):
 
 ```bash
-docker compose stop rating-bot online-bot panel
+docker compose stop rating-bot online-bot giveaway-bot panel
 docker compose exec -T db pg_dump -U flamebot -d flamebot --clean --if-exists --no-owner | gzip > flamebot.sql.gz
 scp flamebot.sql.gz root@IP_СЕРВЕРА:/tmp/
 ```
@@ -197,7 +199,8 @@ cd /opt/flamebot/prod && ./deploy/update.sh
    В `.env` тестовой копии: данные тестового приложения Discord и тестового сервера,
    `COMPOSE_PROJECT_NAME=flamebot-staging`, `PANEL_PORT=3001`, `PANEL_URL=https://bots-staging.flamerust.gg`,
    `TRUST_PROXY=true`, свои `POSTGRES_PASSWORD`, `SESSION_SECRET` и `ONLINE_SECRET_KEY`
-   (`pnpm -F online-bot gen-key` на ПК).
+   (`pnpm -F online-bot gen-key` на ПК). `GIVEAWAY_DISCORD_TOKEN` — от отдельного тестового приложения
+   или пустой: с рабочим токеном тестовая копия начнёт отвечать на команды вместо рабочей.
 3. `./deploy/update.sh`, затем запись `bots-staging` в Cloudflare и блок `bots-staging.flamerust.gg` в Caddyfile (раздел 3) и Redirect
    `https://bots-staging.flamerust.gg/api/auth/callback` у тестового приложения в Developer Portal.
 
@@ -255,7 +258,7 @@ Required reviewers → добавь себя. Тогда в Actions у депл�
 ```bash
 cd /opt/flamebot/prod
 docker compose ps                       # что запущено
-docker compose logs -f --tail=100 rating-bot   # логи бота (online-bot, panel — аналогично)
+docker compose logs -f --tail=100 rating-bot   # логи бота (online-bot, giveaway-bot, panel — аналогично)
 ./deploy/backup.sh                      # резервная копия прямо сейчас
 ```
 

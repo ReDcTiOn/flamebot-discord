@@ -45,4 +45,9 @@ export const EVENT_GROUPS_BY_BOT: Record<string, Record<string, string>> = {
     server: "Серверы",
     bot: "Система",
   },
+  giveaway: {
+    giveaway: "Розыгрыши",
+    promo: "Промокоды",
+    bot: "Система",
+  },
 };
