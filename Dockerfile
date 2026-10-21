@@ -24,6 +24,9 @@ ENV DATABASE_URL=postgresql://build:build@localhost:5432/build
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY packages packages
 COPY apps apps
+# Права файлов приходят из папки на сервере. Если git писал их со строгим umask (077), боты
+# под пользователем node не прочитают package.json ядра и упадут с ERR_MODULE_NOT_FOUND.
+RUN chmod -R a+rX package.json pnpm-workspace.yaml packages apps
 RUN pnpm -F @flamebot/core build && pnpm -F rating-bot build && pnpm -F online-bot build && pnpm -F giveaway-bot build && pnpm -F maps-bot build && pnpm -F panel build
 
 FROM node:22-alpine AS rating-bot
