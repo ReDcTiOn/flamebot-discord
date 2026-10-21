@@ -1,11 +1,25 @@
-import { isBotEnabled, loadPrivateKey, openSecret, prisma, reportBotState, secretContext, type OnlineServer, type OnlineSettings } from "@flamebot/core";
+import { join } from "node:path";
+import {
+  botDataDir,
+  isBotEnabled,
+  loadOrCreateBotKey,
+  openSecret,
+  prisma,
+  publishBotKey,
+  reportBotState,
+  secretContext,
+  type OnlineServer,
+  type OnlineSettings,
+} from "@flamebot/core";
 import { config } from "./config.js";
 import { BOT_KEY, event, log } from "./events.js";
 import { ServerWorker } from "./worker.js";
 
 const RECONCILE_MS = 5_000;
 
-const { key: privateKey, publicKey } = loadPrivateKey(config.ONLINE_SECRET_KEY);
+// Ключ для расшифровки паролей RCON и токенов. Лежит в томе бота, в базу попадает только открытая часть.
+const secretKey = loadOrCreateBotKey(join(botDataDir(), "secret.key"), config.ONLINE_SECRET_KEY);
+const { key: privateKey, publicKey } = secretKey;
 const workers = new Map<number, { worker: ServerWorker; signature: string }>();
 
 async function getSettings(): Promise<OnlineSettings> {
@@ -107,7 +121,9 @@ function every(name: string, fn: () => Promise<void>, ms: number) {
 
 async function main() {
   // Публикуем открытый ключ: панель шифрует им секреты, расшифровать может только этот бот.
-  await prisma.botPublicKey.upsert({ where: { botKey: BOT_KEY }, create: { botKey: BOT_KEY, publicKey }, update: { publicKey } });
+  await publishBotKey(prisma, BOT_KEY, publicKey);
+  if (secretKey.source === "env") log("info", "Ключ шифрования взят из ONLINE_SECRET_KEY и сохранён в томе бота: переменную можно удалить из .env");
+  if (secretKey.source === "generated") log("info", "Создан новый ключ шифрования в томе бота");
   await heartbeat();
   event("bot.start", "Бот онлайна запущен");
   log("info", "Бот онлайна запущен");

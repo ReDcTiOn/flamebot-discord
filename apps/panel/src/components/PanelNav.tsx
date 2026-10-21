@@ -100,7 +100,7 @@ export function PanelNav({
           current.sections.map((s, i) => (
             <div key={s.title ?? i} className="side-group">
               {s.title && <div className="side-label">{s.title}</div>}
-              {s.items.map((item) => (
+              {s.items.filter((item) => user.full || !item.fullOnly).map((item) => (
                 <SideLink key={item.href} href={item.href} icon={item.icon} exact={item.href === `/${current.key}`}>
                   {item.label}
                 </SideLink>

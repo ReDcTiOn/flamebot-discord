@@ -362,6 +362,17 @@ model BotPublicKey {
   updatedAt DateTime @updatedAt
 }
 
+// Токен Discord бота, который вводится в панели. Панель шифрует его открытым ключом бота
+// (BotPublicKey) и прочитать обратно не может: расшифровывает только сам бот.
+model BotCredential {
+  botKey          String    @id
+  discordTokenEnc String?
+  tokenSetAt      DateTime?
+  tokenSetById    String?
+  tokenSetByName  String?
+  updatedAt       DateTime  @updatedAt
+}
+
 // Снимок ролей и каналов сервера. Его пишет бот, панель только читает,
 // поэтому токены ботов веб-панели не нужны.
 model GuildRole {
@@ -400,6 +411,11 @@ model BotStatus {
   botKey      String   @id
   heartbeatAt DateTime
   state       String   @default("running")
+  // Под каким аккаунтом бот вошёл в Discord и почему не смог войти. Пишет сам бот.
+  discordUserId  String?
+  discordUserTag String?
+  discordAvatar  String?
+  loginError     String?
 }
 
 // Включён ли бот. Панель меняет флаг, бот проверяет его каждые несколько секунд:

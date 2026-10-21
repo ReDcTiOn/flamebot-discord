@@ -3,8 +3,9 @@ import { z } from "zod";
 const SNOWFLAKE = /^\d{17,20}$/;
 
 const schema = z.object({
-  DISCORD_TOKEN: z.string({ error: "DISCORD_TOKEN не задан" }).min(50, "DISCORD_TOKEN не задан"),
-  DISCORD_CLIENT_ID: z.string({ error: "DISCORD_CLIENT_ID не задан" }).regex(SNOWFLAKE, "DISCORD_CLIENT_ID должен быть Discord ID"),
+  // Старый способ: токен в .env. Теперь токен задаётся в панели («Подключение»); значение отсюда
+  // бот один раз переносит в базу зашифрованным, после чего строку можно удалить.
+  DISCORD_TOKEN: z.string().trim().default(""),
   GUILD_ID: z.string({ error: "GUILD_ID не задан" }).regex(SNOWFLAKE, "GUILD_ID должен быть Discord ID"),
   DATABASE_URL: z.string({ error: "DATABASE_URL не задан" }).startsWith("postgres", "DATABASE_URL должен указывать на PostgreSQL"),
   BOT_NAME: z.string({ error: "BOT_NAME не задан" }).max(40).default("Scrap Rank"),

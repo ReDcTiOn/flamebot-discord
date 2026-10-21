@@ -44,20 +44,16 @@ install -o flamebot -g flamebot -m 600 ~/.ssh/authorized_keys /home/flamebot/.ss
 ```bash
 sudo -iu flamebot
 cd /opt/flamebot/prod
-cp .env.example .env
-chmod 600 .env
-nano .env
+./deploy/init-env.sh
 ```
 
-Что заполнить в `.env`:
+Мастер спросит Application ID и Client Secret приложения для входа в панель, ID сервера Discord,
+адрес панели (`https://bots.flamerust.gg`), порт (`3000`) и имя копии (`flamebot`). Пароль базы и секрет
+сессий он сгенерирует сам и запишет `.env` с правами только для владельца. Руками `.env` править не нужно.
 
-- `DISCORD_TOKEN`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `GUILD_ID` — как у тебя на ПК.
-- `ONLINE_SECRET_KEY` — **тот же, что на ПК**, если переносишь базу: иначе бот онлайна не прочитает сохранённые пароли RCON.
-- `GIVEAWAY_DISCORD_TOKEN` — токен бота розыгрышей. Один токен — одна работающая копия: если бот запущен
-  и на ПК, и на сервере, обе копии будут подводить итоги. Перед запуском на сервере останови его на ПК.
-- `PANEL_URL=https://bots.flamerust.gg`, `TRUST_PROXY=true`.
-- `COMPOSE_PROJECT_NAME=flamebot`, `PANEL_PORT=3000`.
-- `POSTGRES_PASSWORD` и `SESSION_SECRET` — новые: `openssl rand -hex 24` и `openssl rand -hex 32`.
+Токены ботов в `.env` не пишутся: после запуска войди в панель и у каждого бота открой «Подключение».
+Один токен — одна работающая копия: если бот запущен и на ПК, и на сервере, обе копии будут отвечать
+на команды и подводить итоги. Перед запуском на сервере останови ботов на ПК.
 
 Запуск (первая сборка займёт несколько минут):
 
@@ -115,12 +111,12 @@ sudo journalctl -u caddy -f           # ждём «certificate obtained successf
 Если в `journalctl -u caddy` появятся ошибки продления, временно переключи запись в DNS only и выполни
 `sudo systemctl reload caddy`.
 
-### 3.4. Discord и `.env`
+### 3.4. Discord и адрес панели
 
 1. [Discord Developer Portal](https://discord.com/developers/applications) → твоё приложение → **OAuth2 → Redirects** → добавь
    `https://bots.flamerust.gg/api/auth/callback` и сохрани. Старый `http://localhost:3000/...` можно оставить для работы на ПК.
-2. В `/opt/flamebot/prod/.env`: `PANEL_URL=https://bots.flamerust.gg` и `TRUST_PROXY=true`, затем
-   `./deploy/update.sh --restart`.
+2. Если при запуске мастера адрес был другим, запусти `./deploy/init-env.sh` ещё раз с адресом
+   `https://bots.flamerust.gg` (остальное он подставит сам), затем `./deploy/update.sh --restart`.
 
 Открывай `https://bots.flamerust.gg` и входи через Discord.
 
@@ -129,6 +125,10 @@ sudo journalctl -u caddy -f           # ждём «certificate obtained successf
 Ранги, магазин, игроки и серверы уже настроены у тебя в Docker на ПК — их можно перенести целиком.
 
 **Одновременно бот с одним токеном должен работать только в одном месте**, иначе опыт будет начисляться дважды.
+
+Токены ботов и пароли RCON в базе зашифрованы ключами ботов с ПК, а на сервере боты создадут себе новые ключи.
+Поэтому после переноса заново задай токены в «Подключении» каждого бота и пароли RCON с токенами в «Онлайн серверов» → «Серверы».
+Это занимает пару минут и надёжнее, чем переносить ключи.
 
 На ПК (Git Bash, в папке проекта):
 
@@ -193,19 +193,18 @@ cd /opt/flamebot/prod && ./deploy/update.sh
 
    ```bash
    git clone -b dev https://github.com/ReDcTiOn/flamebot-discord.git /opt/flamebot/staging
-   cd /opt/flamebot/staging && cp .env.example .env && chmod 600 .env && nano .env
+   cd /opt/flamebot/staging && ./deploy/init-env.sh
    ```
 
-   В `.env` тестовой копии: данные тестового приложения Discord и тестового сервера,
-   `COMPOSE_PROJECT_NAME=flamebot-staging`, `PANEL_PORT=3001`, `PANEL_URL=https://bots-staging.flamerust.gg`,
-   `TRUST_PROXY=true`, свои `POSTGRES_PASSWORD`, `SESSION_SECRET` и `ONLINE_SECRET_KEY`
-   (`pnpm -F online-bot gen-key` на ПК). `GIVEAWAY_DISCORD_TOKEN` — от отдельного тестового приложения
-   или пустой: с рабочим токеном тестовая копия начнёт отвечать на команды вместо рабочей.
+   Мастеру тестовой копии: данные тестового приложения Discord и тестового сервера, адрес
+   `https://bots-staging.flamerust.gg`, порт `3001`, имя `flamebot-staging`. Пароли и ключи у неё свои.
+   В «Подключении» тестовой копии задавай токены только тестовых приложений: с рабочим токеном
+   тестовая копия начнёт отвечать на команды вместо рабочей.
 3. `./deploy/update.sh`, затем запись `bots-staging` в Cloudflare и блок `bots-staging.flamerust.gg` в Caddyfile (раздел 3) и Redirect
    `https://bots-staging.flamerust.gg/api/auth/callback` у тестового приложения в Developer Portal.
 
 База у тестовой копии своя и пустая. Можно залить в неё копию рабочей базы через `restore.sh`,
-но тогда серверы онлайна придётся ввести заново: у тестовой копии другой `ONLINE_SECRET_KEY`.
+но тогда токены ботов и серверы онлайна придётся ввести заново: у тестовой копии свои ключи шифрования.
 
 Порядок работы:
 

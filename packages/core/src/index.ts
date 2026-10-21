@@ -5,6 +5,7 @@ export * from "./settings.js";
 export * from "./ranks.js";
 export * from "./permissions.js";
 export * from "./util.js";
+export * from "./credentials.js";
 export { Prisma } from "@prisma/client";
 export type {
   PanelSettings,
@@ -17,6 +18,7 @@ export type {
   GuildInfo,
   BotStatus,
   BotControl,
+  BotCredential,
   ProfileCard,
   CustomRoleRequest,
   CustomRoleRequestStatus,

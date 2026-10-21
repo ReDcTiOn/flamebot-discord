@@ -3,8 +3,8 @@ import { z } from "zod";
 const SNOWFLAKE = /^\d{17,20}$/;
 
 const schema = z.object({
-  // Токен отдельного приложения Discord для розыгрышей. Пустой — бот ждёт, пока его зададут
-  // в .env, и не мешает обновлению остальных сервисов.
+  // Старый способ: токен в .env. Теперь токен задаётся в панели («Подключение»); значение отсюда
+  // бот один раз переносит в базу зашифрованным, после чего строку можно удалить.
   GIVEAWAY_DISCORD_TOKEN: z.string().trim().default(""),
   GUILD_ID: z.string({ error: "GUILD_ID не задан" }).regex(SNOWFLAKE, "GUILD_ID должен быть Discord ID"),
   DATABASE_URL: z.string({ error: "DATABASE_URL не задан" }).startsWith("postgres", "DATABASE_URL должен указывать на PostgreSQL"),

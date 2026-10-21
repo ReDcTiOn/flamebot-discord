@@ -1,5 +1,18 @@
+import { join } from "node:path";
 import { Client, Events, GatewayIntentBits, Partials, Routes, type Guild } from "discord.js";
-import { ensureRatingDefaults, isBotEnabled, prisma, reportBotState } from "@flamebot/core";
+import {
+  botDataDir,
+  botTokenVersion,
+  describeLoginError,
+  ensureRatingDefaults,
+  isBotEnabled,
+  loadBotToken,
+  loadOrCreateBotKey,
+  prisma,
+  publishBotKey,
+  reportBotIdentity,
+  reportBotState,
+} from "@flamebot/core";
 import { commands } from "./commands/index.js";
 import { rememberCommandIds } from "./commands/mention.js";
 import { config } from "./config.js";
@@ -18,6 +31,14 @@ const HEARTBEAT_MS = 30_000;
 let client: Client | null = null;
 let guildReady = false;
 const timers: NodeJS.Timeout[] = [];
+
+// Ключ, которым панель шифрует токен. Лежит в томе бота, в базу попадает только открытая часть.
+const secretKey = loadOrCreateBotKey(join(botDataDir(), "secret.key"));
+await publishBotKey(prisma, BOT_KEY, secretKey.publicKey);
+if (secretKey.source === "generated") log.info("Создан ключ шифрования токена в томе бота");
+
+let token: string | null = null;
+let tokenVersion = "";
 
 // Фоновые задачи, привязанные к подключению: при остановке бота они останавливаются тоже.
 function every(fn: () => Promise<void>, ms: number) {
@@ -81,6 +102,7 @@ function createClient(): Client {
 
   c.once(Events.ClientReady, async (ready) => {
     log.info(`Бот запущен как ${ready.user.tag}`);
+    await reportBotIdentity(prisma, BOT_KEY, { id: ready.user.id, tag: ready.user.tag, avatar: ready.user.avatar }, null);
     await ensureRatingDefaults(prisma);
     for (const guild of ready.guilds.cache.values()) await leaveForeignGuild(guild);
 
@@ -128,13 +150,15 @@ async function startBot() {
   if (client) return;
   // После неудачного входа ждём 30 секунд, чтобы не долбить Discord каждые 5 секунд.
   if (Date.now() - lastLoginFailAt < 30_000) return;
+  if (!token) return;
   const c = createClient();
   client = c;
   try {
-    await c.login(config.DISCORD_TOKEN);
+    await c.login(token);
     lastLoginFailAt = 0;
   } catch (err) {
     log.error("Не удалось подключиться к Discord", err);
+    await reportBotIdentity(prisma, BOT_KEY, null, describeLoginError(err));
     lastLoginFailAt = Date.now();
     client = null;
     await c.destroy().catch(() => undefined);
@@ -153,10 +177,39 @@ async function stopBot() {
 let lastState: "running" | "paused" | "failed" | null = null;
 let lastBeat = 0;
 
+// Перечитывает токен, если в панели его задали, заменили или удалили. true — токен сменился на ходу.
+async function refreshToken(): Promise<boolean> {
+  const version = await botTokenVersion(prisma, BOT_KEY);
+  if (version === tokenVersion) return false;
+  const firstLoad = tokenVersion === "";
+  const result = await loadBotToken(prisma, BOT_KEY, secretKey, config.DISCORD_TOKEN);
+  // Перенос из .env сам меняет версию — запоминаем уже новую, чтобы не переподключаться дважды.
+  tokenVersion = await botTokenVersion(prisma, BOT_KEY);
+  lastLoginFailAt = 0;
+  if (result.token !== null) {
+    token = result.token;
+    if (result.source === "env-migrated") {
+      log.warn("Токен перенесён из .env в базу (зашифрован). Строку DISCORD_TOKEN из .env можно удалить.");
+      event("bot.token_migrated", "Токен бота перенесён из .env в панель, теперь он меняется в разделе «Подключение»");
+    }
+  } else {
+    token = null;
+    log.warn(result.error);
+    await reportBotIdentity(prisma, BOT_KEY, null, result.error);
+  }
+  return !firstLoad;
+}
+
 // Раз в несколько секунд сверяемся с панелью: включить или выключить подключение к Discord.
 async function supervise() {
   const enabled = await isBotEnabled(prisma, BOT_KEY);
-  if (enabled && !client) {
+  if ((await refreshToken()) && client) {
+    log.info("Токен изменён в панели, переподключаюсь");
+    event("bot.token_changed", "Токен бота изменён в панели, бот переподключился");
+    await stopBot();
+  }
+
+  if (enabled && token && !client) {
     if (lastState === "paused" || lastState === "failed") {
       log.info("Запуск по команде из панели");
       event("bot.resumed", "Бот запущен из панели");
@@ -168,7 +221,7 @@ async function supervise() {
     event("bot.paused", "Бот остановлен из панели: отключён от Discord", { level: "WARN" });
   }
 
-  const state = client ? "running" : enabled && lastLoginFailAt > 0 ? "failed" : "paused";
+  const state = client ? "running" : enabled && (!token || lastLoginFailAt > 0) ? "failed" : "paused";
   if (state !== lastState || Date.now() - lastBeat > HEARTBEAT_MS) {
     await reportBotState(prisma, BOT_KEY, state);
     lastState = state;

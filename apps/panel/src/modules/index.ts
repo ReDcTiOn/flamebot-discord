@@ -8,6 +8,8 @@ export interface ModuleNavItem {
   href: string;
   label: string;
   icon: IconName;
+  // Только для администраторов: модераторы панели пункт не видят, а страница их не пускает.
+  fullOnly?: boolean;
 }
 
 export interface ModuleNavSection {
@@ -50,7 +52,8 @@ export type IconName =
   | "server"
   | "activity"
   | "gift"
-  | "ticket";
+  | "ticket"
+  | "plug";
 
 export const modules: PanelModule[] = [
   {
@@ -79,6 +82,7 @@ export const modules: PanelModule[] = [
         items: [
           { href: "/rating/channels", label: "Каналы", icon: "hash" },
           { href: "/rating/messages", label: "Сообщения", icon: "message" },
+          { href: "/rating/connection", label: "Подключение", icon: "plug", fullOnly: true },
         ],
       },
       {
@@ -117,7 +121,13 @@ export const modules: PanelModule[] = [
         title: "Розыгрыши",
         items: [{ href: "/giveaway/list", label: "Все розыгрыши", icon: "gift" }],
       },
-      { title: "Настройки", items: [{ href: "/giveaway/settings", label: "Настройки", icon: "layers" }] },
+      {
+        title: "Настройки",
+        items: [
+          { href: "/giveaway/settings", label: "Настройки", icon: "layers" },
+          { href: "/giveaway/connection", label: "Подключение", icon: "plug", fullOnly: true },
+        ],
+      },
       { title: "Журнал", items: [{ href: "/giveaway/events", label: "История", icon: "list" }] },
     ],
   },

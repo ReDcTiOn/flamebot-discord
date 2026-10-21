@@ -25,3 +25,6 @@ imported_bots/
 
 # Граф кода Graphify: локальный, пересобирается командой graphify update .
 graphify-out/
+
+# Ключи ботов при запуске без Docker (BOT_DATA_DIR по умолчанию)
+.data/

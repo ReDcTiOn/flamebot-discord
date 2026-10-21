@@ -15,6 +15,8 @@ const ACTIONS: Record<string, string> = {
   logout: "Выход",
   "access.update": "Изменил доступ к панели",
   "sessions.revoke_all": "Завершил все сессии",
+  "bot.token.set": "Задал токен бота",
+  "bot.token.clear": "Удалил токен бота",
   "xp.update": "Изменил настройки опыта",
   "rep.update": "Изменил настройки репутации",
   "channels.update": "Изменил каналы",

@@ -49,10 +49,14 @@ services:
       context: .
       target: rating-bot
     environment:
-      DISCORD_TOKEN: ${DISCORD_TOKEN:?Задай DISCORD_TOKEN в .env}
-      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:?Задай DISCORD_CLIENT_ID в .env}
+      # Необязателен: токен задаётся в панели («Подключение»). Старый токен отсюда бот один раз
+      # переносит в базу зашифрованным, после чего строку из .env можно удалить.
+      DISCORD_TOKEN: ${DISCORD_TOKEN:-}
       GUILD_ID: ${GUILD_ID:?Задай GUILD_ID в .env}
       DATABASE_URL: postgresql://flamebot:${POSTGRES_PASSWORD}@db:5432/flamebot
+    # Ключ шифрования токена. Только у этого сервиса, в базу не попадает.
+    volumes:
+      - rating-bot-data:/data
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -64,10 +68,13 @@ services:
       context: .
       target: online-bot
     environment:
-      # Приватный ключ для расшифровки паролей RCON и токенов. Есть только у этого сервиса.
-      ONLINE_SECRET_KEY: ${ONLINE_SECRET_KEY:?Задай ONLINE_SECRET_KEY в .env (pnpm -F online-bot gen-key)}
+      # Необязателен: ключ для паролей RCON и токенов бот хранит в своём томе и создаёт сам.
+      # Если ключ задан здесь (как раньше), бот копирует его в том, и строку можно удалить.
+      ONLINE_SECRET_KEY: ${ONLINE_SECRET_KEY:-}
       ALLOW_PRIVATE_RCON: ${ALLOW_PRIVATE_RCON:-false}
       DATABASE_URL: postgresql://flamebot:${POSTGRES_PASSWORD}@db:5432/flamebot
+    volumes:
+      - online-bot-data:/data
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -79,10 +86,12 @@ services:
       context: .
       target: giveaway-bot
     environment:
-      # Токен отдельного приложения Discord. Пока он не задан, бот ждёт и показывает ошибку в панели.
+      # Необязателен: токен задаётся в панели («Подключение»), старый отсюда переносится в базу.
       GIVEAWAY_DISCORD_TOKEN: ${GIVEAWAY_DISCORD_TOKEN:-}
       GUILD_ID: ${GUILD_ID}
       DATABASE_URL: postgresql://flamebot:${POSTGRES_PASSWORD}@db:5432/flamebot
+    volumes:
+      - giveaway-bot-data:/data
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -94,7 +103,7 @@ services:
       context: .
       target: panel
     environment:
-      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:?Задай DISCORD_CLIENT_ID в .env}
       DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:?Задай DISCORD_CLIENT_SECRET в .env}
       GUILD_ID: ${GUILD_ID}
       PANEL_URL: ${PANEL_URL:?Задай PANEL_URL в .env}
@@ -120,3 +129,7 @@ networks:
 
 volumes:
   pgdata:
+  # Ключи шифрования токенов, по тому на бота. Потеряешь том — токены придётся ввести в панели заново.
+  rating-bot-data:
+  online-bot-data:
+  giveaway-bot-data:

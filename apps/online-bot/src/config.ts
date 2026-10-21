@@ -2,8 +2,9 @@ import { z } from "zod";
 
 const schema = z.object({
   DATABASE_URL: z.string({ error: "DATABASE_URL не задан" }).startsWith("postgres", "DATABASE_URL должен указывать на PostgreSQL"),
-  // Приватный ключ X25519 для расшифровки секретов. Сгенерировать: pnpm -F online-bot gen-key
-  ONLINE_SECRET_KEY: z.string({ error: "ONLINE_SECRET_KEY не задан. Сгенерируй: pnpm -F online-bot gen-key" }).min(40),
+  // Приватный ключ X25519 для расшифровки секретов. Необязателен: без него бот берёт ключ из своего
+  // тома (BOT_DATA_DIR), а при первом запуске создаёт новый. Старый ключ из .env бот копирует в том.
+  ONLINE_SECRET_KEY: z.string().trim().default(""),
   // Разрешить RCON на внутренние адреса (локальная сеть, localhost). По умолчанию запрещено.
   ALLOW_PRIVATE_RCON: z
     .enum(["true", "false"])

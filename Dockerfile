@@ -34,6 +34,9 @@ COPY --from=build /app/packages/core ./packages/core
 COPY --from=build /app/apps/rating-bot/package.json ./apps/rating-bot/package.json
 COPY --from=build /app/apps/rating-bot/node_modules ./apps/rating-bot/node_modules
 COPY --from=build /app/apps/rating-bot/dist ./apps/rating-bot/dist
+# Том бота: здесь лежит его ключ шифрования токенов. Принадлежит пользователю node.
+RUN mkdir -p /data && chown node:node /data && chmod 700 /data
+ENV BOT_DATA_DIR=/data
 USER node
 WORKDIR /app/apps/rating-bot
 CMD ["node", "dist/index.js"]
@@ -48,6 +51,9 @@ COPY --from=build /app/packages/core ./packages/core
 COPY --from=build /app/apps/online-bot/package.json ./apps/online-bot/package.json
 COPY --from=build /app/apps/online-bot/node_modules ./apps/online-bot/node_modules
 COPY --from=build /app/apps/online-bot/dist ./apps/online-bot/dist
+# Том бота: здесь лежит его ключ шифрования токенов. Принадлежит пользователю node.
+RUN mkdir -p /data && chown node:node /data && chmod 700 /data
+ENV BOT_DATA_DIR=/data
 USER node
 WORKDIR /app/apps/online-bot
 CMD ["node", "dist/index.js"]
@@ -62,6 +68,9 @@ COPY --from=build /app/packages/core ./packages/core
 COPY --from=build /app/apps/giveaway-bot/package.json ./apps/giveaway-bot/package.json
 COPY --from=build /app/apps/giveaway-bot/node_modules ./apps/giveaway-bot/node_modules
 COPY --from=build /app/apps/giveaway-bot/dist ./apps/giveaway-bot/dist
+# Том бота: здесь лежит его ключ шифрования токенов. Принадлежит пользователю node.
+RUN mkdir -p /data && chown node:node /data && chmod 700 /data
+ENV BOT_DATA_DIR=/data
 USER node
 WORKDIR /app/apps/giveaway-bot
 CMD ["node", "dist/index.js"]
