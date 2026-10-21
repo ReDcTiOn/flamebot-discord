@@ -69,7 +69,7 @@ check() {
   local services
   for _ in $(seq 1 45); do
     services=$(docker compose ps --status running --services)
-    if grep -qx rating-bot <<<"$services" && grep -qx online-bot <<<"$services" && grep -qx giveaway-bot <<<"$services" && grep -qx panel <<<"$services" \
+    if grep -qx rating-bot <<<"$services" && grep -qx online-bot <<<"$services" && grep -qx giveaway-bot <<<"$services" && grep -qx maps-bot <<<"$services" && grep -qx panel <<<"$services" \
       && curl -fsS -o /dev/null --max-time 3 "http://127.0.0.1:$port/login"; then
       # Бот мог упасть сразу после старта: смотрим, что за пару секунд ничего не перезапустилось.
       sleep 3
@@ -102,7 +102,7 @@ fi
 
 echo
 printf '\033[1;31mНовая версия не поднялась.\033[0m Последние логи:\n'
-docker compose logs --tail=40 migrate rating-bot online-bot giveaway-bot panel || true
+docker compose logs --tail=40 migrate rating-bot online-bot giveaway-bot maps-bot panel || true
 
 if [[ $next == "$prev" ]]; then
   fail "Откатывать некуда: код не менялся. Смотри логи выше и .env."

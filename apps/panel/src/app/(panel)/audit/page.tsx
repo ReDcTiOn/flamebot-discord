@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@flamebot/core";
 import { ModalTrigger } from "@/components/ui/Modal";
 import { requirePage } from "@/lib/auth";
+import { MAPS_ACTION_LABEL } from "@/lib/maps";
 import { modules } from "@/modules";
 import { PageHead } from "@/components/Fields";
 
@@ -40,6 +41,18 @@ const ACTIONS: Record<string, string> = {
   "giveaway.create": "Создал розыгрыш",
   "giveaway.finish": "Досрочно подвёл итоги розыгрыша",
   "giveaway.cancel": "Отменил розыгрыш",
+  "maps.settings": "Изменил настройки карт",
+  "maps.autopick": "Переключил автоподбор карт",
+  "maps.server.save": "Сохранил сервер карт",
+  "maps.server.delete": "Удалил сервер карт",
+  "maps.rule.save": "Сохранил правило расписания вайпов",
+  "maps.rule.delete": "Удалил правило расписания вайпов",
+  "maps.scoring": "Изменил веса оценки карт",
+  "maps.scoring.reset": "Сбросил веса оценки карт",
+  "maps.secrets": "Заменил ключи бота карт",
+  "maps.secret.clear": "Удалил ключ бота карт",
+  // Задания боту карт: «maps.<действие>».
+  ...Object.fromEntries(Object.entries(MAPS_ACTION_LABEL).map(([k, v]) => [`maps.${k}`, `Бот карт: ${v.toLowerCase()}`])),
   "bot.start": "Запустил бота",
   "bot.stop": "Остановил бота",
   "card.update": "Изменил карточку профиля",

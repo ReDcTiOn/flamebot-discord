@@ -54,7 +54,8 @@ export type IconName =
   | "gift"
   | "ticket"
   | "plug"
-  | "plus";
+  | "plus"
+  | "map";
 
 export const modules: PanelModule[] = [
   {
@@ -133,6 +134,28 @@ export const modules: PanelModule[] = [
         ],
       },
       { title: "Журнал", items: [{ href: "/giveaway/events", label: "История", icon: "list" }] },
+    ],
+  },
+  {
+    key: "maps",
+    title: "Карты вайпов",
+    description: "Карты с RustMaps под расписание вайпов: выбор и автоподбор, загрузка в S3, анонс в Discord и ссылки в Pterodactyl",
+    icon: "map",
+    color: "#4c8bf5",
+    sections: [
+      { title: null, items: [{ href: "/maps", label: "Обзор", icon: "dashboard" }] },
+      { title: "Вайпы", items: [{ href: "/maps/cycles", label: "Вайпы и карты", icon: "map" }] },
+      {
+        title: "Настройки",
+        items: [
+          { href: "/maps/servers", label: "Серверы", icon: "server" },
+          { href: "/maps/rules", label: "Расписание", icon: "clock" },
+          { href: "/maps/scoring", label: "Оценка карт", icon: "trending" },
+          { href: "/maps/settings", label: "Настройки", icon: "layers" },
+          { href: "/maps/connection", label: "Подключение", icon: "plug", fullOnly: true },
+        ],
+      },
+      { title: "Журнал", items: [{ href: "/maps/events", label: "История", icon: "list" }] },
     ],
   },
 ];

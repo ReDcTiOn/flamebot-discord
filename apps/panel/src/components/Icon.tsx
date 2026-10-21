@@ -9,6 +9,7 @@ import {
   Layers,
   LayoutDashboard,
   List,
+  Map as MapIcon,
   Megaphone,
   MessageSquare,
   Mic,
@@ -57,6 +58,7 @@ const ICONS: Record<IconName, LucideIcon> = {
   gift: Gift,
   ticket: Ticket,
   plus: Plus,
+  map: MapIcon,
   plug: Plug,
 };
 

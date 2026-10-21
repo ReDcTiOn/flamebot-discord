@@ -32,6 +32,14 @@ export type {
   GiveawayEntry,
   GiveawayPromoCode,
   GiveawayStatus,
+  MapsSettings,
+  MapsSecret,
+  MapsServer,
+  MapsWipeRule,
+  MapsCycle,
+  MapsSlot,
+  MapsCandidate,
+  MapsAction,
   EventLevel,
   CardAsset,
   AuditLog,
@@ -43,3 +51,5 @@ export * from "./secrets.js";
 export * from "./online.js";
 export * from "./control.js";
 export * from "./giveaways.js";
+export * from "./maps.js";
+export * from "./mapsScoring.js";

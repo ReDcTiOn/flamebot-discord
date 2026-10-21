@@ -50,4 +50,12 @@ export const EVENT_GROUPS_BY_BOT: Record<string, Record<string, string>> = {
     promo: "Промокоды",
     bot: "Система",
   },
+  maps: {
+    cycle: "Вайпы",
+    map: "Карты",
+    discord: "Анонсы",
+    ptero: "Pterodactyl",
+    telegram: "Telegram",
+    bot: "Система",
+  },
 };

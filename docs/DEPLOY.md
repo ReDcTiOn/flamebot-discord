@@ -133,7 +133,7 @@ sudo journalctl -u caddy -f           # ждём «certificate obtained successf
 На ПК (Git Bash, в папке проекта):
 
 ```bash
-docker compose stop rating-bot online-bot giveaway-bot panel
+docker compose stop rating-bot online-bot giveaway-bot maps-bot panel
 docker compose exec -T db pg_dump -U flamebot -d flamebot --clean --if-exists --no-owner | gzip > flamebot.sql.gz
 scp flamebot.sql.gz root@IP_СЕРВЕРА:/tmp/
 ```
@@ -257,7 +257,7 @@ Required reviewers → добавь себя. Тогда в Actions у депл�
 ```bash
 cd /opt/flamebot/prod
 docker compose ps                       # что запущено
-docker compose logs -f --tail=100 rating-bot   # логи бота (online-bot, giveaway-bot, panel — аналогично)
+docker compose logs -f --tail=100 rating-bot   # логи бота (online-bot, giveaway-bot, maps-bot, panel — аналогично)
 ./deploy/backup.sh                      # резервная копия прямо сейчас
 ```
 

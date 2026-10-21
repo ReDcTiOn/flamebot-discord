@@ -97,6 +97,23 @@ services:
         condition: service_completed_successfully
     networks: [internal, egress]
 
+  maps-bot:
+    <<: *hardening
+    build:
+      context: .
+      target: maps-bot
+    environment:
+      # Ключи RustMaps, S3, Pterodactyl, вебхук и токен Telegram задаются в панели («Карты вайпов» → «Подключение»).
+      # PANEL_URL нужен только для ссылок «Открыть в панели» в Telegram.
+      PANEL_URL: ${PANEL_URL:-}
+      DATABASE_URL: postgresql://flamebot:${POSTGRES_PASSWORD}@db:5432/flamebot
+    volumes:
+      - maps-bot-data:/data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks: [internal, egress]
+
   panel:
     <<: *hardening
     build:
@@ -133,3 +150,4 @@ volumes:
   rating-bot-data:
   online-bot-data:
   giveaway-bot-data:
+  maps-bot-data:

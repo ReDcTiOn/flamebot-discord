@@ -358,6 +358,193 @@ model GiveawayPromoCode {
   @@index([giveawayId])
 }
 
+// ===================== Карты вайпов (модуль "maps") =====================
+// Бот заказывает карты на RustMaps под расписание вайпов, заливает выбранные в S3,
+// шлёт анонс в Discord и записывает ссылки в задачи вайпа Pterodactyl.
+// Управление — из панели и кнопками в Telegram, логика одна: в боте.
+
+// Единственная строка с id = 1.
+model MapsSettings {
+  id                 Int      @id @default(1)
+  // Пояс расписания: время вайпов в правилах и во всех сообщениях.
+  timezone           String   @default("Europe/Moscow")
+  timezoneLabel      String   @default("МСК")
+  // Анонс в Discord уходит за sendLeadHours до вайпа, генерация начинается ещё за genLeadHours до анонса.
+  sendLeadHours      Float    @default(24)
+  genLeadHours       Float    @default(10)
+  // Автоподбор: бот сам выбирает лучшие карты из пула и предлагает набор целиком.
+  autoPick           Boolean  @default(false)
+  // Запись ссылок в Pterodactyl: спросить за panelAskHours до вайпа, напоминать, записать самим за panelAutoMinutes.
+  panelAskHours      Int      @default(8)
+  panelRemindMinutes Int      @default(60)
+  panelAutoMinutes   Int      @default(30)
+  // Telegram: кто может нажимать кнопки (user id) и куда слать сообщения (пусто — первому админу).
+  telegramAdminIds   String[] @default([])
+  telegramChatId     String?
+  rustmapsOrgId      String?
+  s3Endpoint         String   @default("")
+  s3Region           String   @default("")
+  s3Bucket           String   @default("")
+  s3Prefix           String   @default("maps")
+  // path или virtual: как адресовать бакет.
+  s3Addressing       String   @default("path")
+  // Публичный адрес бакета: ссылка на карту = cdnBaseUrl/<ключ объекта>.
+  cdnBaseUrl         String   @default("")
+  pteroUrl           String?
+  // Веса оценки карт (core/src/mapsScoring.ts). null — значения по умолчанию.
+  scoring            Json?
+  updatedAt          DateTime @updatedAt
+}
+
+// Секреты бота карт: токен Telegram, ключи RustMaps, S3 и Pterodactyl, вебхук Discord.
+// Шифруются открытым ключом бота, панель прочитать их не может.
+model MapsSecret {
+  name      String   @id
+  valueEnc  String
+  // Безопасная подсказка, чтобы было видно, что сохранено (последние символы, без самого секрета).
+  hint      String?
+  setAt     DateTime @default(now())
+  setById   String?
+  setByName String?
+}
+
+// Игровой сервер, для которого подбираются карты.
+model MapsServer {
+  id          Int      @id // номер сервера: FR #1, FR #2...
+  title       String
+  // Папка в S3: <s3Prefix>/<folder>/<файл>.map
+  folder      String
+  size        Int
+  // Имя сохранённой конфигурации на RustMaps.
+  savedConfig String
+  // Идентификатор сервера в Pterodactyl (из адреса /server/<id>). Пусто — ссылки в панель не пишутся.
+  pteroUuid   String?
+  updatedAt   DateTime @updatedAt
+}
+
+// Правило расписания: в какой день недели и во сколько вайп, какие серверы, сколько карт заказывать.
+model MapsWipeRule {
+  key            String    @id
+  weekday        Int // 0 — понедельник, 6 — воскресенье
+  time           String // "14:00" по поясу настроек
+  serverIds      Int[]
+  // Сколько карт генерировать за раз по каждой сохранённой конфигурации: { "4000_Modded": 3 }.
+  pool           Json
+  // Тело сообщения вебхука Discord. {view:N} и {download:N} — ссылки на карту сервера N.
+  template       Json
+  // В первую неделю месяца время вайпа берётся из другого пояса (форс-вайп по времени США).
+  forceTimezone  String?
+  forceTime      String?
+  // Глобальный вайп (в Pterodactyl включается «Wipe Blueprints»): первый такой день месяца
+  // и/или каждые bpEveryDays дней от bpAnchor.
+  bpFirstOfMonth Boolean   @default(false)
+  bpEveryDays    Int       @default(0)
+  bpAnchor       DateTime? @db.Date
+  enabled        Boolean   @default(true)
+  updatedAt      DateTime  @updatedAt
+}
+
+// Цикл — подготовка карт к одному вайпу.
+// status: generating -> scheduled (авто-отправка в sendAt) -> sending -> sent;
+//         ответвления: awaiting_discord (только вручную), skipped.
+model MapsCycle {
+  id              String          @id // например "thursday-2026-10-22"
+  ruleKey         String
+  wipeAt          DateTime
+  sendAt          DateTime
+  status          String
+  staging         Boolean         @default(false)
+  blueprints      Boolean         @default(false)
+  // Время анонса прошло, а карты не готовы: предупреждение уже отправлено.
+  warned          Boolean         @default(false)
+  // Идёт автоподбор: показываем набор целиком. autoMsgId -1 — сообщение отправляется.
+  autoMode        Boolean         @default(false)
+  autoMsgId       Int?
+  promptMsgId     Int?
+  // Запись ссылок в Pterodactyl: idle -> pending (спросили) -> done | skipped.
+  panelState      String          @default("idle")
+  panelMsgId      Int?
+  panelNotifiedAt DateTime?
+  createdAt       DateTime        @default(now())
+  slots           MapsSlot[]
+  candidates      MapsCandidate[]
+
+  @@index([status])
+  @@index([wipeAt])
+}
+
+// Карта сервера в цикле. status: waiting -> ready -> uploading -> uploaded | error.
+// source: rustmaps | manual (загружена вручную).
+model MapsSlot {
+  id           Int       @id @default(autoincrement())
+  cycleId      String
+  cycle        MapsCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  serverId     Int
+  size         Int
+  config       String
+  attempt      Int       @default(1)
+  seed         Int?
+  rmMapId      String?
+  status       String
+  info         Json?
+  viewUrl      String?
+  s3Key        String?
+  cdnUrl       String?
+  error        String?
+  source       String    @default("rustmaps")
+  candId       Int?
+  tgMsgId      Int?
+  tgPhotoMsgId Int?
+  // Ссылка записана в задачу вайпа в Pterodactyl.
+  panelSynced  Boolean   @default(false)
+  panelNote    String?
+
+  @@index([cycleId])
+  @@index([status])
+}
+
+// Карта из пула вайпа. status: queued -> generating -> ready -> assigned | rejected | error.
+model MapsCandidate {
+  id            Int       @id @default(autoincrement())
+  cycleId       String
+  cycle         MapsCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  size          Int
+  config        String
+  seed          Int?
+  rmMapId       String?
+  status        String
+  info          Json?
+  viewUrl       String?
+  error         String?
+  // Какому серверу карта показывалась.
+  slotId        Int?
+  // Порядок пролистывания (для «Назад») и отложенные кнопкой «Назад».
+  rejectedOrder Int?
+  parkedOrder   Int?
+  createdAt     DateTime  @default(now())
+
+  @@index([cycleId, size, config, status])
+  @@index([status])
+}
+
+// Действия из панели. Логика карт живёт в боте, поэтому панель ставит задание сюда,
+// а бот выполняет его за пару секунд и правит сообщения в Telegram.
+model MapsAction {
+  id        Int       @id @default(autoincrement())
+  kind      String
+  args      Json
+  // pending -> done | error
+  status    String    @default("pending")
+  result    String?
+  details   Json?
+  byId      String?
+  byName    String?
+  createdAt DateTime  @default(now())
+  doneAt    DateTime?
+
+  @@index([status, id])
+}
+
 // ===================== Платформа: общие данные сервера =====================
 
 // Открытые ключи ботов для шифрования секретов. Приватные ключи есть только у ботов.
