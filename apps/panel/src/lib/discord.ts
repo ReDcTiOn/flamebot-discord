@@ -1,7 +1,9 @@
 import { env } from "./env";
 
 const API = "https://discord.com/api/v10";
-export const OAUTH_SCOPES = ["identify", "guilds.members.read"] as const;
+// guilds — список серверов, где Discord сам указывает владельца и права пользователя.
+// Так панель знает администраторов даже на чистой установке, пока бот ещё не подключён.
+export const OAUTH_SCOPES = ["identify", "guilds", "guilds.members.read"] as const;
 
 export interface DiscordUser {
   id: string;
@@ -71,6 +73,33 @@ export async function fetchGuildMember(accessToken: string): Promise<DiscordGuil
   if (res.status === 401) throw new DiscordAuthError("Токен Discord недействителен");
   if (!res.ok) throw new Error(`Discord недоступен (${res.status})`);
   return (await res.json()) as DiscordGuildMember;
+}
+
+export interface DiscordGuildAccess {
+  owner: boolean;
+  permissions: bigint;
+}
+
+// Права пользователя на нашем сервере, как их считает сам Discord (все роли и владелец).
+// null — список недоступен (сессия старого входа без разрешения guilds): тогда права берутся
+// из снимка ролей, который пишет бот.
+export async function fetchGuildAccess(accessToken: string): Promise<DiscordGuildAccess | null> {
+  const guildId = env().GUILD_ID;
+  let after = "0";
+  // Discord отдаёт до 200 серверов за раз. Больше 1000 серверов у человека не бывает.
+  for (let page = 0; page < 5; page++) {
+    const res = await discordFetch(`/users/@me/guilds?limit=200&after=${after}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (res.status === 401) throw new DiscordAuthError("Токен Discord недействителен");
+    if (!res.ok) return null;
+    const list = (await res.json()) as { id: string; owner?: boolean; permissions?: string }[];
+    const guild = list.find((g) => g.id === guildId);
+    if (guild) return { owner: guild.owner === true, permissions: BigInt(guild.permissions ?? "0") };
+    if (list.length < 200) break;
+    after = list[list.length - 1]!.id;
+  }
+  return { owner: false, permissions: 0n };
 }
 
 export async function revokeToken(accessToken: string): Promise<void> {

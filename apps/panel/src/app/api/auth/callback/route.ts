@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@flamebot/core";
 import { computeAccess } from "@/lib/access";
 import { safeEqual } from "@/lib/crypto";
-import { DiscordAuthError, exchangeCode, fetchGuildMember, fetchMe, revokeToken } from "@/lib/discord";
+import { DiscordAuthError, exchangeCode, fetchGuildAccess, fetchGuildMember, fetchMe, revokeToken } from "@/lib/discord";
 import { env, oauthCookieName } from "@/lib/env";
 import { rateLimit } from "@/lib/rateLimit";
 import { clientIp } from "@/lib/request";
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
       return fail("not_member");
     }
 
-    const level = await computeAccess(user.id, member.roles);
+    const level = await computeAccess(user.id, member.roles, await fetchGuildAccess(accessToken));
     if (!level) {
       await revokeToken(accessToken);
       await prisma.auditLog.create({

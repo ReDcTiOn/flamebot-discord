@@ -3,7 +3,7 @@ import { cache } from "react";
 import { prisma, type AdminSession } from "@flamebot/core";
 import { computeAccess, type AccessLevel } from "./access";
 import { decrypt, encrypt, randomToken, sha256 } from "./crypto";
-import { DiscordAuthError, fetchGuildMember } from "./discord";
+import { DiscordAuthError, fetchGuildAccess, fetchGuildMember } from "./discord";
 import { isSecureOrigin, sessionCookieName } from "./env";
 import { clientIp } from "./request";
 
@@ -72,7 +72,7 @@ async function reverify(session: AdminSession): Promise<Exclude<AccessLevel, nul
   try {
     const member = await fetchGuildMember(accessToken);
     if (!member) return null;
-    return await computeAccess(session.userId, member.roles);
+    return await computeAccess(session.userId, member.roles, await fetchGuildAccess(accessToken));
   } catch (err) {
     // Токен отозван — выкидываем. Discord временно недоступен — оставляем прежний уровень.
     if (err instanceof DiscordAuthError) return null;
