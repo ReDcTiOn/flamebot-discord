@@ -15,6 +15,7 @@ const PendingContext = createContext(false);
 export function ActionForm({
   action,
   children,
+  id,
   className,
   confirm,
   confirmMessage,
@@ -23,7 +24,9 @@ export function ActionForm({
   resetOnSuccess = false,
 }: {
   action: Action;
-  children: ReactNode;
+  children?: ReactNode;
+  // Нужен, когда кнопка формы стоит внутри другой формы (атрибут form="id").
+  id?: string;
   className?: string;
   confirm?: string;
   confirmMessage?: ReactNode;
@@ -63,6 +66,7 @@ export function ActionForm({
     <PendingContext.Provider value={pending}>
       <form
         key={formKey}
+        id={id}
         className={className}
         // Отправляем вручную, а не через action={...}: иначе React 19 после каждой отправки
         // сбрасывает поля к исходным значениям и при ошибке введённое пропадает.
@@ -102,11 +106,19 @@ export function ActionForm({
   );
 }
 
-export function SubmitButton({ children, variant = "primary" }: { children: ReactNode; variant?: "primary" | "secondary" | "danger" | "danger-solid" }) {
+export function SubmitButton({
+  children,
+  variant = "primary",
+  pendingText = "Сохраняю…",
+}: {
+  children: ReactNode;
+  variant?: "primary" | "secondary" | "danger" | "danger-solid";
+  pendingText?: string;
+}) {
   const pending = useContext(PendingContext);
   return (
     <button type="submit" className={`btn ${variant}`} disabled={pending} aria-busy={pending}>
-      {pending ? "Сохраняю…" : children}
+      {pending ? pendingText : children}
     </button>
   );
 }

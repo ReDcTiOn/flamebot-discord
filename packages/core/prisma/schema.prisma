@@ -278,7 +278,40 @@ model OnlineServerStatus {
   botError    String?
   rconError   String?
   lastSeenAt  DateTime?
+  // О чём последний раз знают получатели в Telegram: ONLINE или OFFLINE (null — ещё ни о чём).
+  // Хранится в базе, чтобы после перезапуска бота не повторять и не терять уведомления.
+  alertState  OnlineState?
+  // С какого момента сервер не работает — для «был выключен 15 мин».
+  downSince   DateTime?
   updatedAt   DateTime     @updatedAt
+}
+
+// Уведомления в Telegram о выключении и включении серверов. Единственная строка с id = 1.
+// Отдельно от OnlineSettings: их смена не должна переподключать Discord-ботов серверов.
+model OnlineTelegram {
+  id              Int       @id @default(1)
+  // Куда слать: ID пользователей, групп (с минусом) или @username публичных каналов.
+  chatIds         String[]  @default([])
+  notifyOffline   Boolean   @default(true)
+  notifyOnline    Boolean   @default(true)
+  // Сколько сервер должен пролежать, прежде чем сообщать: короткий обрыв RCON не тревога.
+  delaySec        Int       @default(60)
+  offlineText     String    @default("🔴 Сервер {server} выключился")
+  onlineText      String    @default("🟢 Сервер {server} снова работает. Был выключен {downtime}")
+  // Токен бота зашифрован открытым ключом бота онлайна: панель и база его прочитать не могут.
+  tokenEnc        String?
+  tokenHint       String?
+  tokenSetAt      DateTime?
+  tokenSetByName  String?
+  // Что видит бот: под каким именем вошёл в Telegram или почему не смог.
+  botUsername     String?
+  botError        String?
+  // Пробное сообщение: панель ставит testRequestedAt, бот отправляет и записывает результат.
+  testRequestedAt DateTime?
+  testDoneAt      DateTime?
+  testResult      String?
+  testOk          Boolean?
+  updatedAt       DateTime  @updatedAt
 }
 
 // ===================== Бот розыгрышей (модуль "giveaway") =====================

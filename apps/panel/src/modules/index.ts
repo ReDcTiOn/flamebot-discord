@@ -106,6 +106,7 @@ export const modules: PanelModule[] = [
         items: [
           { href: "/online/servers", label: "Серверы", icon: "server" },
           { href: "/online/settings", label: "Настройки", icon: "layers" },
+          { href: "/online/telegram", label: "Telegram", icon: "message" },
         ],
       },
       { title: "Журнал", items: [{ href: "/online/events", label: "История", icon: "list" }] },

@@ -27,6 +27,8 @@ export class ServerWorker {
   private appliedPresence = "";
 
   private state: OnlineState = "OFFLINE";
+  // С какого момента сервер не онлайн: для уведомлений в Telegram. До первого ответа — с запуска.
+  private offlineSince = Date.now();
   private everOnline = false;
   private info = { players: 0, max: 0, queued: 0 };
   private botTag: string | null = null;
@@ -42,6 +44,19 @@ export class ServerWorker {
     private readonly allowPrivate: boolean,
   ) {
     this.presence = { status: "dnd", text: settings.offlineText };
+  }
+
+  get id() {
+    return this.server.id;
+  }
+
+  get name() {
+    return this.server.name;
+  }
+
+  // Состояние для уведомлений: что сейчас с сервером и с какого момента он не работает.
+  snapshot(): { state: OnlineState; offlineSince: number; players: number; max: number } {
+    return { state: this.state, offlineSince: this.offlineSince, players: this.info.players, max: this.info.max };
   }
 
   private get label() {
@@ -120,6 +135,7 @@ export class ServerWorker {
     if (state === "OFFLINE") this.setPresence("dnd", this.settings.offlineText);
     if (state === "STARTING") this.setPresence("idle", this.settings.startingText);
     if (prev === state) return;
+    if (prev === "ONLINE") this.offlineSince = Date.now();
 
     if (state === "ONLINE") {
       event("server.online", `${this.label}: сервер онлайн`, { details: { ...this.info } });

@@ -43,6 +43,7 @@ export const EVENT_GROUPS_BY_BOT: Record<string, Record<string, string>> = {
   },
   online: {
     server: "Серверы",
+    telegram: "Telegram",
     bot: "Система",
   },
   giveaway: {

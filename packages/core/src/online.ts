@@ -48,6 +48,65 @@ export function onlineStatusText(template: string, info: { players: number; max:
     .slice(0, 128);
 }
 
+// ---------- Уведомления в Telegram ----------
+
+export const ONLINE_TELEGRAM_TOKEN_CONTEXT = "online:telegram:token";
+
+export const telegramTokenSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{5,15}:[\w-]{30,}$/, "Это не похоже на токен Telegram: 123456789:AA… от @BotFather");
+
+// По токену видно, какой это бот, но не сам секрет: «бот 123456789, …AbCd».
+export function telegramTokenHint(token: string): string {
+  return `бот ${token.split(":")[0]}, …${token.slice(-4)}`;
+}
+
+// ID пользователя, группы (с минусом) или @username публичного канала.
+const telegramChat = z
+  .string()
+  .regex(/^(-?\d{1,20}|@[A-Za-z][\w]{4,31})$/, "Чат Telegram — число (у групп с минусом) или @username канала");
+
+const notifyText = z.string().trim().min(1, "Текст уведомления пустой").max(1000);
+
+export const onlineTelegramSchema = z.object({
+  chatIds: z.array(telegramChat).max(20, "Не больше 20 получателей"),
+  notifyOffline: z.boolean(),
+  notifyOnline: z.boolean(),
+  delaySec: z.number().int().min(0).max(3600),
+  offlineText: notifyText,
+  onlineText: notifyText,
+});
+
+// Список чатов из поля панели: через запятую, пробел или с новой строки, без повторов.
+export function parseTelegramChats(text: string): string[] {
+  return [...new Set(text.split(/[\s,;]+/).filter(Boolean))];
+}
+
+// «45 с», «12 мин», «2 ч 5 мин», «3 д 4 ч».
+export function formatDowntime(ms: number): string {
+  const sec = Math.max(0, Math.round(ms / 1000));
+  if (sec < 60) return `${sec} с`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min} мин`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return min % 60 ? `${h} ч ${min % 60} мин` : `${h} ч`;
+  const d = Math.floor(h / 24);
+  return h % 24 ? `${d} д ${h % 24} ч` : `${d} д`;
+}
+
+export function onlineTelegramText(
+  template: string,
+  vars: { server: string; downtime?: string; players?: number; max?: number },
+): string {
+  return template
+    .replaceAll("{server}", vars.server)
+    .replaceAll("{downtime}", vars.downtime ?? "")
+    .replaceAll("{players}", vars.players === undefined ? "" : String(vars.players))
+    .replaceAll("{max}", vars.max === undefined ? "" : String(vars.max))
+    .slice(0, 4000);
+}
+
 // Внутренние и служебные адреса. Бот не подключается к ним, чтобы через панель
 // нельзя было заставить его стучаться внутрь сети, где стоят база и панель.
 export function isPrivateAddress(ip: string): boolean {

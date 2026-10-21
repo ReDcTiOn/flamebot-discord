@@ -236,6 +236,13 @@ export async function saveMapsSecrets(_prev: ActionResult, fd: FormData): Promis
       if (!value) continue; // пустое поле — оставить прежний
       const problem = mapsSecretProblem(meta.name as MapsSecretName, value);
       if (problem) throw new ActionError(`${meta.label}: ${problem}`);
+      // Тот же Telegram-бот у бота онлайна: двое не могут читать его сообщения, кнопки перестали бы работать.
+      if (meta.name === "telegramToken") {
+        const online = await prisma.onlineTelegram.findUnique({ where: { id: 1 }, select: { tokenHint: true } });
+        if (online?.tokenHint?.match(/\d{5,15}/)?.[0] === value.split(":")[0]) {
+          throw new ActionError("Этот Telegram-бот уже подключён к уведомлениям об онлайне серверов. Для бота карт нужен отдельный.");
+        }
+      }
       const data = {
         valueEnc: sealSecret(key.publicKey, value, mapsSecretContext(meta.name as MapsSecretName)),
         hint: mapsSecretHint(meta.name as MapsSecretName, value),

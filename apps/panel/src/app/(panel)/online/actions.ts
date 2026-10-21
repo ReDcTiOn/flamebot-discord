@@ -2,13 +2,18 @@
 
 import { revalidatePath } from "next/cache";
 import {
+  ONLINE_TELEGRAM_TOKEN_CONTEXT,
   discordTokenSchema,
   onlineServerSchema,
   onlineSettingsSchema,
+  onlineTelegramSchema,
+  parseTelegramChats,
   prisma,
   rconPasswordSchema,
   sealSecret,
   secretContext,
+  telegramTokenHint,
+  telegramTokenSchema,
 } from "@flamebot/core";
 import { ActionError, audit, runAction, type ActionResult } from "@/lib/auth";
 import { bool, idParam, int, intOrNull, str } from "@/lib/form";
@@ -110,5 +115,82 @@ export async function saveOnlineSettings(_prev: ActionResult, fd: FormData): Pro
     await audit(user, MODULE, "online.settings", null, data);
     revalidatePath("/online", "layout");
     return "Настройки сохранены. Боты переподключатся с новыми настройками в течение 10 секунд.";
+  });
+}
+
+// ---------- Уведомления в Telegram ----------
+
+export async function saveOnlineTelegram(_prev: ActionResult, fd: FormData): Promise<ActionResult> {
+  return runAction("any", async (user) => {
+    const data = onlineTelegramSchema.parse({
+      chatIds: parseTelegramChats(str(fd, "chatIds")),
+      notifyOffline: bool(fd, "notifyOffline"),
+      notifyOnline: bool(fd, "notifyOnline"),
+      delaySec: int(fd, "delaySec"),
+      offlineText: str(fd, "offlineText"),
+      onlineText: str(fd, "onlineText"),
+    });
+    await prisma.onlineTelegram.upsert({ where: { id: 1 }, create: { id: 1, ...data }, update: data });
+    await audit(user, MODULE, "online.telegram", null, data);
+    revalidatePath("/online/telegram");
+    return "Уведомления сохранены. Бот применит их в течение нескольких секунд.";
+  });
+}
+
+// Номер бота из токена «123:AA…» или из подсказки «бот 123, …abcd».
+const telegramBotId = (v: string | null | undefined) => v?.match(/\d{5,15}/)?.[0] ?? null;
+
+export async function saveOnlineTelegramToken(_prev: ActionResult, fd: FormData): Promise<ActionResult> {
+  return runAction("full", async (user) => {
+    const token = telegramTokenSchema.parse(str(fd, "telegramToken"));
+    // Два бота не могут читать сообщения одного Telegram-бота: кнопки бота карт перестали бы работать.
+    const maps = await prisma.mapsSecret.findUnique({ where: { name: "telegramToken" } });
+    if (maps && telegramBotId(maps.hint) === telegramBotId(token)) {
+      throw new ActionError("Этот Telegram-бот уже подключён к боту карт. Для уведомлений создай отдельного бота в @BotFather.");
+    }
+    const key = await botPublicKey();
+    const hint = telegramTokenHint(token);
+    const data = {
+      tokenEnc: sealSecret(key, token, ONLINE_TELEGRAM_TOKEN_CONTEXT),
+      tokenHint: hint,
+      tokenSetAt: new Date(),
+      tokenSetByName: user.username,
+      botUsername: null,
+      botError: null,
+    };
+    await prisma.onlineTelegram.upsert({ where: { id: 1 }, create: { id: 1, ...data }, update: data });
+    // Сам токен в журнал не пишем.
+    await audit(user, MODULE, "online.telegram.token", hint);
+    revalidatePath("/online/telegram");
+    return "Токен сохранён. Бот подключится к Telegram в течение нескольких секунд.";
+  });
+}
+
+export async function clearOnlineTelegramToken(_prev: ActionResult, _fd: FormData): Promise<ActionResult> {
+  return runAction("full", async (user) => {
+    await prisma.onlineTelegram.updateMany({ data: { tokenEnc: null, tokenHint: null, tokenSetAt: null, tokenSetByName: null, botUsername: null, botError: null } });
+    await audit(user, MODULE, "online.telegram.token.clear", null);
+    revalidatePath("/online/telegram");
+    return "Токен удалён: уведомления в Telegram отключены.";
+  });
+}
+
+// Просит бота отправить пробное сообщение и ждёт результат до 15 секунд.
+export async function testOnlineTelegram(_prev: ActionResult, _fd: FormData): Promise<ActionResult> {
+  return runAction("any", async (user) => {
+    const requested = new Date();
+    await prisma.onlineTelegram.upsert({ where: { id: 1 }, create: { id: 1, testRequestedAt: requested }, update: { testRequestedAt: requested } });
+    await audit(user, MODULE, "online.telegram.test", null);
+    const deadline = Date.now() + 15_000;
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 500));
+      const row = await prisma.onlineTelegram.findUnique({ where: { id: 1 } });
+      if (row?.testDoneAt && row.testDoneAt >= requested) {
+        revalidatePath("/online/telegram");
+        if (!row.testOk) throw new ActionError(row.testResult ?? "Не отправилось");
+        return row.testResult ?? "Отправлено";
+      }
+    }
+    throw new ActionError("Бот онлайна не ответил за 15 секунд: проверь, что он запущен.");
   });
 }

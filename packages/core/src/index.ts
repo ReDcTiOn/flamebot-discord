@@ -26,6 +26,7 @@ export type {
   OnlineServer,
   OnlineServerStatus,
   OnlineSettings,
+  OnlineTelegram,
   OnlineState,
   GiveawaySettings,
   Giveaway,

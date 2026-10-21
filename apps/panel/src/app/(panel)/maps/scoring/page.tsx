@@ -43,16 +43,16 @@ export default async function MapsScoringPage() {
           </div>
         </Section>
 
-        <div className="save-bar">
+        <div className="save-bar" style={{ gap: 8 }}>
+          {/* Формы нельзя вкладывать друг в друга: кнопка стоит рядом с «Сохранить», а отправляет форму сброса ниже. */}
+          <button type="submit" form="maps-scoring-reset" className="btn secondary">
+            Вернуть по умолчанию
+          </button>
           <SubmitButton>Сохранить</SubmitButton>
         </div>
       </ActionForm>
 
-      <ActionForm action={resetMapsScoring} confirm="Вернуть веса оценки по умолчанию?" confirmLabel="Вернуть">
-        <div className="save-bar" style={{ justifyContent: "flex-start" }}>
-          <SubmitButton variant="secondary">Вернуть по умолчанию</SubmitButton>
-        </div>
-      </ActionForm>
+      <ActionForm id="maps-scoring-reset" action={resetMapsScoring} confirm="Вернуть веса оценки по умолчанию?" confirmLabel="Вернуть" />
     </>
   );
 }

@@ -13,6 +13,10 @@
     "./card": {
       "types": "./dist/card/index.d.ts",
       "default": "./dist/card/index.js"
+    },
+    "./telegram": {
+      "types": "./dist/telegram.d.ts",
+      "default": "./dist/telegram.js"
     }
   },
   "scripts": {

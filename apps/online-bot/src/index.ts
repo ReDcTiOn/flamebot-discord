@@ -13,6 +13,7 @@ import {
 } from "@flamebot/core";
 import { config } from "./config.js";
 import { BOT_KEY, event, log } from "./events.js";
+import { TelegramNotifier } from "./notify.js";
 import { ServerWorker } from "./worker.js";
 
 const RECONCILE_MS = 5_000;
@@ -21,6 +22,7 @@ const RECONCILE_MS = 5_000;
 const secretKey = loadOrCreateBotKey(join(botDataDir(), "secret.key"), config.ONLINE_SECRET_KEY);
 const { key: privateKey, publicKey } = secretKey;
 const workers = new Map<number, { worker: ServerWorker; signature: string }>();
+const notifier = new TelegramNotifier(privateKey);
 
 async function getSettings(): Promise<OnlineSettings> {
   return prisma.onlineSettings.upsert({ where: { id: 1 }, update: {}, create: { id: 1 } });
@@ -39,6 +41,7 @@ async function reconcile(): Promise<void> {
   if (!(await isBotEnabled(prisma, BOT_KEY))) {
     if (!paused) {
       paused = true;
+      notifier.pause();
       for (const id of [...workers.keys()]) await stopWorker(id);
       await prisma.onlineServerStatus.updateMany({ data: { state: "DISABLED", players: null, maxPlayers: null, queued: null } });
       await reportBotState(prisma, BOT_KEY, "paused");
@@ -63,7 +66,8 @@ async function reconcile(): Promise<void> {
       await prisma.onlineServerStatus.upsert({
         where: { serverId: s.id },
         create: { serverId: s.id, state: "DISABLED" },
-        update: { state: "DISABLED", players: null, maxPlayers: null, queued: null },
+        // Выключенный сервер не тревога: после включения уведомления начнутся заново.
+        update: { state: "DISABLED", players: null, maxPlayers: null, queued: null, alertState: null, downSince: null },
       });
       continue;
     }
@@ -101,6 +105,11 @@ async function stopWorker(id: number) {
   if (w) await w.worker.stop();
 }
 
+async function notify() {
+  if (paused) return;
+  await notifier.tick([...workers.values()].map((w) => w.worker));
+}
+
 async function heartbeat() {
   await reportBotState(prisma, BOT_KEY, paused ? "paused" : "running");
 }
@@ -129,6 +138,7 @@ async function main() {
   log("info", "Бот онлайна запущен");
   await reconcile();
   every("сверка серверов", reconcile, RECONCILE_MS);
+  every("уведомления в Telegram", notify, 3_000);
   every("статус бота", heartbeat, 60_000);
 }
 
