@@ -10,7 +10,8 @@ const PLACEHOLDERS = [
   ["{user}", "упоминание игрока"],
   ["{name}", "имя без упоминания"],
   ["{rank}", "новый ранг с эмодзи"],
-  ["{reward}", "скрап за ранг"],
+  ["{reward}", "сколько скрапа за ранг"],
+  ["{scrap_icon}", "эмодзи скрапа"],
 ] as const;
 
 export default async function MessagesPage() {

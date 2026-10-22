@@ -3,6 +3,7 @@ import { formatNumber, levelFromExp, prisma, SNOWFLAKE } from "@flamebot/core";
 import { EmptyState, PageHead } from "@/components/Fields";
 import { requirePage } from "@/lib/auth";
 import { avatarUrl } from "@/lib/discord";
+import { ScrapIcon } from "@/components/ScrapIcon";
 
 export const metadata = { title: "Игроки" };
 
@@ -77,7 +78,7 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
                 <th>Ранг</th>
                 <th className="num">Уровень</th>
                 <th className="num">Опыт</th>
-                <th className="num">Скрап</th>
+                <th className="num"><ScrapIcon alt="Скрап" /></th>
                 <th className="num">Репутация</th>
                 <th />
               </tr>

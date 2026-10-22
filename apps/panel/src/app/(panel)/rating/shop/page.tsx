@@ -8,6 +8,7 @@ import { ModalCancel, ModalTrigger } from "@/components/ui/Modal";
 import { requirePage } from "@/lib/auth";
 import { listRoles, listTextChannels } from "@/lib/guild";
 import { createShopItem, deleteShopItem, saveCustomRoleSettings, updateShopItem } from "../actions";
+import { ScrapIcon } from "@/components/ScrapIcon";
 
 export const metadata = { title: "Магазин" };
 
@@ -107,7 +108,7 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
                     </div>
                   </div>
                   <div className="row-actions">
-                    <span style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums", marginRight: 6 }}>{formatNumber(item.price)} скрапа</span>
+                    <span style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums", marginRight: 6 }}>{formatNumber(item.price)} <ScrapIcon /></span>
                     <span className={item.enabled ? "chip success" : "chip"}>{item.enabled ? "В продаже" : "Скрыт"}</span>
                     <ModalTrigger label="Изменить" buttonClass="btn small" title={item.name} description={`Товар #${item.id}`} size="lg">
                       <ActionForm action={updateShopItem}>

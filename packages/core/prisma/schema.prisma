@@ -42,7 +42,7 @@ model RatingSettings {
 
   announceRankUp    Boolean  @default(true)
   announceChannelId String?
-  rankUpMessage     String   @default("{user} дорос до ранга «{rank}» и получает {reward} скрапа")
+  rankUpMessage     String   @default("{user} дорос до ранга «{rank}» и получает {reward} {scrap_icon}")
   removeOldRankRoles Boolean @default(false)
 
   // Каналы, где начисляется опыт. Пустой список — опыт начисляется во всех каналах.
@@ -218,6 +218,15 @@ model MemberBadge {
 model ProfileCard {
   id        Int      @id @default(1)
   layout    Json
+  updatedAt DateTime @updatedAt
+}
+
+// Сохранённые варианты карточки: их можно открыть в редакторе и сделать текущей.
+model CardPreset {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  layout    Json
+  createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 

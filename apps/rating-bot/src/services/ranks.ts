@@ -3,6 +3,7 @@ import { formatNumber, prisma, rankForXp, renderTemplate, type Rank, type Rating
 import { log } from "../logger.js";
 import { event } from "./events.js";
 import { grantRole, revokeRole } from "./roles.js";
+import { SCRAP } from "../ui.js";
 
 // Приводит роли участника к его рангу и выдаёт награды за новые ранги.
 // Возвращает ранг, если участник только что поднялся.
@@ -72,6 +73,7 @@ export async function announceRankUp(
     name: escapeMarkdown(member.displayName),
     rank: `${rank.emoji ? rank.emoji + " " : ""}${escapeMarkdown(rank.name)}`,
     reward: formatNumber(reward),
+    scrap_icon: SCRAP,
   });
 
   try {

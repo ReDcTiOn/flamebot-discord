@@ -8,6 +8,7 @@ import { ModalCancel, ModalTrigger } from "@/components/ui/Modal";
 import { requirePage } from "@/lib/auth";
 import { listRoles } from "@/lib/guild";
 import { createRank, deleteRank, saveXpSettings, updateRank } from "../actions";
+import { ScrapIcon } from "@/components/ScrapIcon";
 
 export const metadata = { title: "Опыт и ранги" };
 
@@ -37,7 +38,7 @@ function RankFields({ roles, rank, defaults }: { roles: Roles; rank?: Rank; defa
           <input type="number" name="minLevel" defaultValue={rank?.minLevel} placeholder="10" min={1} max={999} required className="wide" />
         </label>
         <label className="stack">
-          <span>Награда скрапом за ранг</span>
+          <span>Награда за ранг, <ScrapIcon /></span>
           <input type="number" name="scrapReward" defaultValue={rank?.scrapReward ?? 0} min={0} required className="wide" />
         </label>
       </div>
@@ -53,7 +54,7 @@ function RankFields({ roles, rank, defaults }: { roles: Roles; rank?: Rank; defa
             <input type="number" name="xpMax" defaultValue={rank?.xpMax ?? ""} min={0} max={1000} step={0.01} inputMode="decimal" className="wide" placeholder={String(defaults.xpMax)} />
           </label>
           <label className="stack">
-            <span>Скрап</span>
+            <span><ScrapIcon /> Скрап</span>
             <input type="number" name="scrapPerMessage" defaultValue={rank?.scrapPerMessage ?? ""} min={0} max={1000} step={0.01} inputMode="decimal" className="wide" placeholder={String(defaults.scrap)} />
           </label>
         </div>
@@ -115,7 +116,7 @@ export default async function XpPage({ searchParams }: { searchParams: Promise<{
               <FieldRow icon="ruler" label="Минимальная длина сообщения" hint="Короткие «ок» и «+» опыт не дают">
                 <NumberInput name="minMessageLength" defaultValue={s.minMessageLength} min={0} max={500} label="Минимальная длина" />
               </FieldRow>
-              <FieldRow icon="coin" label="Скрап за начисление опыта" hint="Начисляется вместе с опытом, можно с сотыми. Для ранга можно задать своё">
+              <FieldRow icon="scrap" label="Скрап за начисление опыта" hint="Начисляется вместе с опытом, можно с сотыми. Для ранга можно задать своё">
                 <NumberInput name="scrapPerAward" defaultValue={s.scrapPerAward} min={0} max={1000} step={0.01} label="Скрап" />
               </FieldRow>
             </div>
@@ -197,11 +198,22 @@ export default async function XpPage({ searchParams }: { searchParams: Promise<{
                       <>
                         с {r.minLevel} уровня ({r.minXp.toLocaleString("ru-RU")} опыта)
                         {r.roleId ? ` · роль @${roleName.get(r.roleId) ?? "удалена"}` : " · без роли"}
-                        {r.scrapReward > 0 ? ` · награда ${r.scrapReward.toLocaleString("ru-RU")} скрапа` : ""}
+                        {r.scrapReward > 0 && (
+                          <>
+                            {` · награда ${r.scrapReward.toLocaleString("ru-RU")} `}
+                            <ScrapIcon />
+                          </>
+                        )}
                         {(() => {
                           const m = messageReward(s, r);
                           const own = r.xpMin !== null || r.scrapPerMessage !== null;
-                          return ` · за сообщение ${formatNumber(m.xpMin)}–${formatNumber(m.xpMax)} опыта и ${formatNumber(m.scrap)} скрапа${own ? "" : " (общие)"}`;
+                          return (
+                            <>
+                              {` · за сообщение ${formatNumber(m.xpMin)}–${formatNumber(m.xpMax)} опыта и ${formatNumber(m.scrap)} `}
+                              <ScrapIcon />
+                              {own ? "" : " (общие)"}
+                            </>
+                          );
                         })()}
                       </>
                     }

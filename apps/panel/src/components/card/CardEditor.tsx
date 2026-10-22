@@ -11,27 +11,40 @@ import {
   ArrowDown,
   ArrowUp,
   Copy,
+  Download,
   Eye,
   EyeOff,
+  FolderOpen,
   Magnet,
   Redo2,
   Trash2,
   Undo2,
+  Upload,
   type LucideIcon,
 } from "lucide-react";
 import {
   CARD_FONTS,
+  CARD_ICONS,
   cardAssetIds,
+  cardFileName,
   cardLayoutSchema,
   elementBounds,
   renderCard,
   type CardData,
   type CardElement,
   type CardElementType,
+  type CardIconKey,
   type CardLayout,
   type Ctx2D,
 } from "@flamebot/core/card";
-import { saveCardLayout, uploadCardAsset } from "@/app/(panel)/rating/actions";
+import {
+  deleteCardPreset,
+  exportCardFile,
+  importCardFile,
+  saveCardLayout,
+  saveCardPreset,
+  uploadCardAsset,
+} from "@/app/(panel)/rating/actions";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
 import { ColorField, NumField, Row, SelectField } from "./controls";
@@ -109,6 +122,21 @@ function capture(e: ReactPointerEvent<HTMLCanvasElement>) {
   }
 }
 
+export type CardPresetItem = { id: number; name: string; layout: CardLayout; updatedAt: string };
+
+function downloadText(text: string, filename: string) {
+  const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+
 function isTyping(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
   return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
@@ -119,11 +147,13 @@ export function CardEditor({
   defaultLayout,
   data,
   avatarUrl,
+  presets,
 }: {
   initialLayout: CardLayout;
   defaultLayout: CardLayout;
   data: CardData;
   avatarUrl: string;
+  presets: CardPresetItem[];
 }) {
   const history = useHistory<CardLayout>(initialLayout);
   const layout = history.value;
@@ -131,7 +161,7 @@ export function CardEditor({
   const dirty = useMemo(() => JSON.stringify(layout) !== savedJson, [layout, savedJson]);
 
   const [selectedId, setSelectedId] = useState<string | null>(initialLayout.elements[0]?.id ?? null);
-  const [tab, setTab] = useState<"elements" | "background">("elements");
+  const [tab, setTab] = useState<"elements" | "background" | "saved">("elements");
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<Status>(null);
   const [snapping, setSnapping] = useState(true);
@@ -139,11 +169,16 @@ export function CardEditor({
   const [redraw, setRedraw] = useState(0);
   const [cursor, setCursor] = useState("default");
   const [askReset, setAskReset] = useState(false);
+  const [presetName, setPresetName] = useState("");
+  const [presetBusy, setPresetBusy] = useState(false);
+  const [askOverwrite, setAskOverwrite] = useState<string | null>(null);
+  const [askDelete, setAskDelete] = useState<CardPresetItem | null>(null);
   const toast = useToast();
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const images = useRef(new Map<number, HTMLImageElement>());
   const avatar = useRef<HTMLImageElement | null>(null);
+  const icons = useRef(new Map<CardIconKey, HTMLImageElement>());
   const gesture = useRef<Gesture | null>(null);
   const guides = useRef<Guides>({ xs: [], ys: [] });
 
@@ -194,6 +229,15 @@ export function CardEditor({
     avatar.current = img;
   }, [avatarUrl]);
 
+  useEffect(() => {
+    for (const [key, icon] of Object.entries(CARD_ICONS) as [CardIconKey, (typeof CARD_ICONS)[CardIconKey]][]) {
+      const img = new Image();
+      img.onload = () => setRedraw((n) => n + 1);
+      img.src = `/api/card/icons/${icon.file}`;
+      icons.current.set(key, img);
+    }
+  }, []);
+
   const assetIds = useMemo(() => cardAssetIds(layout), [layout]);
   useEffect(() => {
     for (const id of assetIds) {
@@ -223,7 +267,8 @@ export function CardEditor({
     canvas.height = layout.height;
     const loaded = new Map([...images.current].filter(([, img]) => img.complete && img.naturalWidth > 0));
     const av = avatar.current?.complete && avatar.current.naturalWidth > 0 ? avatar.current : null;
-    renderCard(ctx, layout, data, { avatar: av, assets: loaded });
+    const loadedIcons = new Map([...icons.current].filter(([, img]) => img.complete && img.naturalWidth > 0));
+    renderCard(ctx, layout, data, { avatar: av, assets: loaded, icons: loadedIcons });
 
     const s = pxScale();
     ctx.save();
@@ -487,6 +532,70 @@ export function CardEditor({
     }
   }
 
+  // ---------- Сохранённые карточки и файлы ----------
+
+  function openLayout(next: CardLayout) {
+    setLayout(next);
+    setSelectedId(next.elements[0]?.id ?? null);
+  }
+
+  function validLayout(source: CardLayout): CardLayout | null {
+    const parsed = cardLayoutSchema.safeParse(source);
+    if (parsed.success) return parsed.data;
+    setStatus({ ok: false, message: `Проверь поля: ${parsed.error.issues[0]?.message ?? "ошибка в шаблоне"}` });
+    return null;
+  }
+
+  async function savePreset(force = false) {
+    const name = presetName.trim();
+    if (!name) {
+      setStatus({ ok: false, message: "Напиши название, под которым сохранить карточку" });
+      return;
+    }
+    if (!force && presets.some((p) => p.name === name)) {
+      setAskOverwrite(name);
+      return;
+    }
+    const valid = validLayout(layout);
+    if (!valid) return;
+    setPresetBusy(true);
+    const res = await saveCardPreset(name, JSON.stringify(valid));
+    setPresetBusy(false);
+    setStatus(null);
+    toast.show(res?.ok ?? false, res?.message ?? "Не получилось сохранить");
+  }
+
+  async function removePreset(p: CardPresetItem) {
+    setPresetBusy(true);
+    const res = await deleteCardPreset(p.id);
+    setPresetBusy(false);
+    toast.show(res?.ok ?? false, res?.message ?? "Не получилось удалить");
+  }
+
+  async function downloadFile(name: string, source: CardLayout) {
+    const valid = validLayout(source);
+    if (!valid) return;
+    setPresetBusy(true);
+    const res = await exportCardFile(name, JSON.stringify(valid));
+    setPresetBusy(false);
+    if (res.ok && res.file) downloadText(res.file, cardFileName(name));
+    else toast.show(false, res.message);
+  }
+
+  async function importFile(file: File | undefined) {
+    if (!file) return;
+    setPresetBusy(true);
+    const fd = new FormData();
+    fd.set("file", file);
+    const res = await importCardFile(fd);
+    setPresetBusy(false);
+    if (res.ok && res.layout) {
+      openLayout(res.layout);
+      if (res.name) setPresetName(res.name);
+    }
+    toast.show(res.ok, res.message);
+  }
+
   const setBg = (patch: Partial<CardLayout["background"]>, key?: string) =>
     setLayout((l) => ({ ...l, background: { ...l.background, ...patch } }), key);
 
@@ -564,6 +673,29 @@ export function CardEditor({
           </p>
         )}
         <ConfirmDialog
+          open={askOverwrite !== null}
+          title={`Перезаписать «${askOverwrite ?? ""}»?`}
+          message="Карточка с таким названием уже есть. Вместо неё сохранится то, что сейчас в редакторе."
+          confirmLabel="Перезаписать"
+          onCancel={() => setAskOverwrite(null)}
+          onConfirm={() => {
+            setAskOverwrite(null);
+            void savePreset(true);
+          }}
+        />
+        <ConfirmDialog
+          open={askDelete !== null}
+          title={`Удалить «${askDelete?.name ?? ""}»?`}
+          message="Сохранённая карточка удалится. Карточку, которую сейчас рисует бот, это не затронет."
+          confirmLabel="Удалить"
+          onCancel={() => setAskDelete(null)}
+          onConfirm={() => {
+            const p = askDelete;
+            setAskDelete(null);
+            if (p) void removePreset(p);
+          }}
+        />
+        <ConfirmDialog
           open={askReset}
           title="Вернуть стандартную карточку?"
           message="Все элементы заменятся стандартными. Это можно отменить стрелкой «Отменить» до сохранения."
@@ -584,6 +716,9 @@ export function CardEditor({
           </button>
           <button type="button" className={tab === "background" ? "seg-btn active" : "seg-btn"} onClick={() => setTab("background")}>
             Фон и размер
+          </button>
+          <button type="button" className={tab === "saved" ? "seg-btn active" : "seg-btn"} onClick={() => setTab("saved")}>
+            Сохранённые
           </button>
         </div>
 
@@ -640,6 +775,83 @@ export function CardEditor({
               </p>
             )}
           </>
+        )}
+
+        {tab === "saved" && (
+          <div className="props">
+            <div className="stack">
+              <span className="prop-label">Сохранить то, что в редакторе</span>
+              <form
+                className="preset-save"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void savePreset();
+                }}
+              >
+                <input type="text" value={presetName} maxLength={40} placeholder="Название, например «Хелоун»" aria-label="Название карточки" onChange={(e) => setPresetName(e.target.value)} />
+                <button type="submit" className="btn small primary" disabled={presetBusy}>
+                  Сохранить
+                </button>
+              </form>
+            </div>
+
+            {presets.length === 0 ? (
+              <p className="muted" style={{ fontSize: 13 }}>
+                Пока ничего не сохранено.
+              </p>
+            ) : (
+              <div className="layers">
+                {presets.map((p) => (
+                  <div key={p.id} className="layer">
+                    <button type="button" className="layer-name" onClick={() => openLayout(p.layout)} title="Открыть в редакторе">
+                      <span>{p.name}</span>
+                      <span className="muted" style={{ fontSize: 11.5 }}>
+                        {JSON.stringify(p.layout) === savedJson ? "у бота · " : ""}
+                        {dateFmt.format(new Date(p.updatedAt))}
+                      </span>
+                    </button>
+                    <button type="button" className="icon-btn" title="Открыть в редакторе" aria-label={`Открыть «${p.name}» в редакторе`} onClick={() => openLayout(p.layout)}>
+                      <FolderOpen size={15} />
+                    </button>
+                    <button type="button" className="icon-btn" title="Скачать файлом" aria-label={`Скачать «${p.name}» файлом`} disabled={presetBusy} onClick={() => void downloadFile(p.name, p.layout)}>
+                      <Download size={15} />
+                    </button>
+                    <button type="button" className="icon-btn danger" title="Удалить" aria-label={`Удалить «${p.name}»`} disabled={presetBusy} onClick={() => setAskDelete(p)}>
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <span className="muted" style={{ fontSize: 12 }}>
+              Сохранённая карточка открывается в редакторе. Чтобы бот рисовал её, нажми «Сохранить» под превью.
+            </span>
+
+            <div className="stack">
+              <span className="prop-label">Файл на компьютере</span>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button type="button" className="btn small" disabled={presetBusy} onClick={() => void downloadFile(presetName || "карточка", layout)}>
+                  <Download size={14} /> Скачать файл
+                </button>
+                <label className="btn small" aria-disabled={presetBusy}>
+                  <Upload size={14} /> Загрузить файл
+                  <input
+                    type="file"
+                    accept=".json,application/json"
+                    hidden
+                    disabled={presetBusy}
+                    onChange={(e) => {
+                      void importFile(e.target.files?.[0]);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+              <span className="muted" style={{ fontSize: 12 }}>
+                В файл попадает то, что сейчас в редакторе, вместе с картинками. Загруженный файл откроется в редакторе.
+              </span>
+            </div>
+          </div>
         )}
 
         {tab === "background" && (

@@ -9,6 +9,7 @@ import { ModalCancel, ModalTrigger } from "@/components/ui/Modal";
 import { requirePage } from "@/lib/auth";
 import { avatarUrl } from "@/lib/discord";
 import { adjustMember, endPurchase, giveBadge, removeBadge, resetMember } from "../../actions";
+import { ScrapIcon } from "@/components/ScrapIcon";
 
 export const metadata = { title: "Игрок" };
 
@@ -187,7 +188,7 @@ export default async function MemberPage({ params, searchParams }: { params: Pro
             {formatNumber(Math.floor(lv.into))} / {formatNumber(lv.need)} до {lv.level + 1} ур. · {next ? `до «${next.name}»: ${formatNumber(Math.max(0, next.minXp - m.xp))}` : "максимальный ранг"}
           </div>
         </div>
-        <div className="metric"><div className="metric-label">Скрап</div><div className="metric-value">{formatNumber(m.scrap)}</div></div>
+        <div className="metric"><div className="metric-label">Скрап</div><div className="metric-value">{formatNumber(m.scrap)} <ScrapIcon /></div></div>
         <div className="metric"><div className="metric-label">Репутация</div><div className="metric-value">{formatNumber(m.rep)}</div><div className="muted" style={{ fontSize: 12, marginTop: 4 }}>сам дал {formatNumber(m._count.repGiven)}</div></div>
         <div className="metric"><div className="metric-label">Место в топе</div><div className="metric-value">#{formatNumber(place)}</div></div>
       </div>
@@ -228,7 +229,7 @@ export default async function MemberPage({ params, searchParams }: { params: Pro
                         {p.customName && <span className="secondary"> · {p.customName}</span>}
                       </div>
                       <div className="setting-hint">
-                        {p.request?.status === "PENDING" ? "Заявка ждёт решения в Discord" : p.expiresAt ? `до ${date(p.expiresAt)}` : "навсегда"} · куплено {date(p.createdAt)} за {formatNumber(p.price)} скрапа
+                        {p.request?.status === "PENDING" ? "Заявка ждёт решения в Discord" : p.expiresAt ? `до ${date(p.expiresAt)}` : "навсегда"} · куплено {date(p.createdAt)} за {formatNumber(p.price)} <ScrapIcon />
                       </div>
                     </div>
                     {p.active && (

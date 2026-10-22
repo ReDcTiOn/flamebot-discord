@@ -9,6 +9,11 @@ export function cardFontsDir(): string {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "assets", "fonts");
 }
 
+// Папка со встроенными иконками карточки (скрап и т. п.).
+export function cardIconsDir(): string {
+  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "assets", "icons");
+}
+
 // Шаблон из базы. Если записи нет или она повреждена — стандартный шаблон.
 export async function getCardLayout(db: Db): Promise<CardLayout> {
   const row = await db.profileCard.findUnique({ where: { id: 1 } });

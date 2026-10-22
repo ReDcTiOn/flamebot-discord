@@ -1,6 +1,7 @@
 "use client";
 
 import { CARD_FONTS, CARD_FONT_KEYS, CARD_PLACEHOLDERS, type CardElement } from "@flamebot/core/card";
+import { ScrapIcon } from "@/components/ScrapIcon";
 import { ColorField, NumField, Row, SelectField } from "./controls";
 
 export function ElementProps({
@@ -35,6 +36,7 @@ export function ElementProps({
           <div className="placeholders">
             {CARD_PLACEHOLDERS.map((p) => (
               <button key={p.key} type="button" className="chip" title={p.label} onClick={() => patch({ text: `${el.text}${p.key}` })}>
+                {p.key === "{scrap_icon}" && <ScrapIcon alt="" />}
                 {p.key}
               </button>
             ))}

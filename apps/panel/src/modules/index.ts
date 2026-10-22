@@ -36,6 +36,7 @@ export type IconName =
   | "hash"
   | "message"
   | "coin"
+  | "scrap"
   | "shield"
   | "list"
   | "home"

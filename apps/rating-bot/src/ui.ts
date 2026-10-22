@@ -21,7 +21,8 @@ export const UI = {
   info: 0x5865f2,
 } as const;
 
-export const SCRAP = "⚙️";
+// Эмодзи скрапа с сервера FlameRust. Бот должен быть на этом сервере, иначе Discord покажет текст.
+export const SCRAP = "<:flamerust_scrap:1555052599172923424>";
 
 export const V2 = MessageFlags.IsComponentsV2;
 export const V2_EPHEMERAL = MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral;

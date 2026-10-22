@@ -1,7 +1,7 @@
 import path from "node:path";
 import { createCanvas, GlobalFonts, loadImage, type Image } from "@napi-rs/canvas";
-import { cardFontsDir, getCardLayout, prisma } from "@flamebot/core";
-import { CARD_FONTS, cardAssetIds, renderCard, type CardData, type CardLayout } from "@flamebot/core/card";
+import { cardFontsDir, cardIconsDir, getCardLayout, prisma } from "@flamebot/core";
+import { CARD_FONTS, CARD_ICONS, cardAssetIds, renderCard, type CardData, type CardIconKey, type CardLayout } from "@flamebot/core/card";
 import { log } from "../logger.js";
 
 let fontsReady = false;
@@ -46,6 +46,24 @@ async function loadAssets(ids: number[]): Promise<Map<number, Image>> {
   return new Map(ids.flatMap((id) => (assetCache.has(id) ? [[id, assetCache.get(id)!] as const] : [])));
 }
 
+// Встроенные иконки читаются с диска один раз.
+let iconsPromise: Promise<Map<CardIconKey, Image>> | null = null;
+
+function loadIcons(): Promise<Map<CardIconKey, Image>> {
+  iconsPromise ??= (async () => {
+    const icons = new Map<CardIconKey, Image>();
+    for (const [key, icon] of Object.entries(CARD_ICONS) as [CardIconKey, (typeof CARD_ICONS)[CardIconKey]][]) {
+      try {
+        icons.set(key, await loadImage(path.join(cardIconsDir(), icon.file)));
+      } catch (err) {
+        log.warn(`Не загрузилась иконка карточки ${icon.file}`, err);
+      }
+    }
+    return icons;
+  })();
+  return iconsPromise;
+}
+
 async function loadAvatar(url: string): Promise<Image | null> {
   try {
     // Только CDN Discord: адрес строит discord.js, а не пользователь.
@@ -63,8 +81,8 @@ async function loadAvatar(url: string): Promise<Image | null> {
 export async function renderProfileCard(data: CardData, avatarUrl: string): Promise<Buffer> {
   registerFonts();
   const layout = await currentLayout();
-  const [assets, avatar] = await Promise.all([loadAssets(cardAssetIds(layout)), loadAvatar(avatarUrl)]);
+  const [assets, avatar, icons] = await Promise.all([loadAssets(cardAssetIds(layout)), loadAvatar(avatarUrl), loadIcons()]);
   const canvas = createCanvas(layout.width, layout.height);
-  renderCard(canvas.getContext("2d"), layout, data, { avatar, assets });
+  renderCard(canvas.getContext("2d"), layout, data, { avatar, assets, icons });
   return canvas.toBuffer("image/png");
 }

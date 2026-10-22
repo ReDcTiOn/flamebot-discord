@@ -21,6 +21,7 @@ export type {
   BotControl,
   BotCredential,
   ProfileCard,
+  CardPreset,
   CustomRoleRequest,
   CustomRoleRequestStatus,
   BotEvent,

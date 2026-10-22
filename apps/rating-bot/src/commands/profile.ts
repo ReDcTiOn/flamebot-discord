@@ -5,6 +5,7 @@ import { log } from "../logger.js";
 import { getState } from "../state.js";
 import { renderProfileCard } from "../services/card.js";
 import { ensureMember, topPosition } from "../services/members.js";
+import { SCRAP } from "../ui.js";
 import { progressBar } from "../util.js";
 import { COLORS, type Command } from "./types.js";
 
@@ -76,7 +77,7 @@ export const profileCommand: Command = {
       .setAuthor({ name: escapeMarkdown(displayName), iconURL: user.displayAvatarURL() })
       .setDescription(`**${rankLabel}** · место в топе **#${place}**\n\n${progressLine}`)
       .addFields(
-        { name: "Скрап", value: formatNumber(row.scrap), inline: true },
+        { name: "Скрап", value: `${SCRAP} ${formatNumber(row.scrap)}`, inline: true },
         { name: "Репутация", value: formatNumber(row.rep), inline: true },
         { name: "Сообщений засчитано", value: formatNumber(row.messageCount), inline: true },
         { name: "Опыт", value: formatNumber(row.xp), inline: true },

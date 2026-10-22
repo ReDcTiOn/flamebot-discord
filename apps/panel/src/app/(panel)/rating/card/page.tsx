@@ -1,7 +1,7 @@
 import { getCardLayout, getRatingSettings, prisma, rankProgress } from "@flamebot/core";
-import { DEFAULT_CARD_LAYOUT, stripEmoji, type CardData } from "@flamebot/core/card";
+import { DEFAULT_CARD_LAYOUT, cardLayoutSchema, stripEmoji, type CardData } from "@flamebot/core/card";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
-import { CardEditor } from "@/components/card/CardEditor";
+import { CardEditor, type CardPresetItem } from "@/components/card/CardEditor";
 import { FieldRow, PageHead, Switch } from "@/components/Fields";
 import { requirePage } from "@/lib/auth";
 import { avatarUrl } from "@/lib/discord";
@@ -11,12 +11,18 @@ export const metadata = { title: "Карточка профиля" };
 
 export default async function CardPage() {
   const user = await requirePage();
-  const [layout, settings, ranks, guild] = await Promise.all([
+  const [layout, settings, ranks, guild, presetRows] = await Promise.all([
     getCardLayout(prisma),
     getRatingSettings(prisma),
     prisma.rank.findMany({ orderBy: { minXp: "asc" } }),
     prisma.guildInfo.findUnique({ where: { id: 1 } }),
+    prisma.cardPreset.findMany({ orderBy: { name: "asc" } }),
   ]);
+  // Всё через схему, чтобы порядок полей совпадал и текущую карточку можно было узнать в списке.
+  const presets: CardPresetItem[] = presetRows.flatMap((p) => {
+    const parsed = cardLayoutSchema.safeParse(p.layout);
+    return parsed.success ? [{ id: p.id, name: p.name, layout: parsed.data, updatedAt: p.updatedAt.toISOString() }] : [];
+  });
 
   // Для превью берём свой профиль, если он есть, иначе лидера рейтинга, иначе пример.
   const member =
@@ -59,7 +65,7 @@ export default async function CardPage() {
       </ActionForm>
 
       <div style={{ height: 20 }} />
-      <CardEditor initialLayout={layout} defaultLayout={DEFAULT_CARD_LAYOUT} data={data} avatarUrl={previewAvatar} />
+      <CardEditor initialLayout={cardLayoutSchema.parse(layout)} defaultLayout={DEFAULT_CARD_LAYOUT} data={data} avatarUrl={previewAvatar} presets={presets} />
     </>
   );
 }

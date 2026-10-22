@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ScrapIcon } from "@/components/ScrapIcon";
 
 type ItemType = "ROLE" | "CUSTOM_ROLE" | "BADGE";
 
@@ -55,7 +56,7 @@ export function ShopItemFields({ item, roles }: { item?: ShopItemDraft; roles: R
           <input type="text" name="name" defaultValue={item?.name} maxLength={80} required className="wide" placeholder="Цвет ника · 30 дней" />
         </label>
         <label className="stack">
-          <span>Цена, скрап</span>
+          <span>Цена, <ScrapIcon /></span>
           <input type="number" name="price" defaultValue={item?.price ?? 500} min={1} required className="wide" />
         </label>
       </div>

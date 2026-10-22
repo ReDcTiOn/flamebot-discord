@@ -1,4 +1,5 @@
 import { cardFontString } from "./fonts.js";
+import { CARD_ICONS, isCardIcon, type CardIconKey } from "./icons.js";
 import { levelProgress } from "../levels.js";
 import type { CardElement, CardLayout } from "./schema.js";
 
@@ -59,6 +60,7 @@ export interface CardData {
 export interface CardImages {
   avatar: ImageLike | null;
   assets: Map<number, ImageLike>;
+  icons?: Map<CardIconKey, ImageLike>;
 }
 
 export const CARD_PLACEHOLDERS: { key: string; label: string }[] = [
@@ -76,6 +78,7 @@ export const CARD_PLACEHOLDERS: { key: string; label: string }[] = [
   { key: "{level_need}", label: "опыт на весь уровень" },
   { key: "{level_progress}", label: "прогресс уровня в %" },
   { key: "{scrap}", label: "скрап" },
+  ...Object.entries(CARD_ICONS).map(([key, icon]) => ({ key: `{${key}_icon}`, label: icon.label })),
   { key: "{rep}", label: "репутация" },
   { key: "{messages}", label: "сообщений засчитано" },
   { key: "{place}", label: "место в топе" },
@@ -144,6 +147,35 @@ function ellipsize(ctx: Ctx2D, text: string, maxWidth: number): string {
   return text.slice(0, lo).trimEnd() + "…";
 }
 
+type TextPart = { text: string } | { icon: CardIconKey };
+type TextEl = Extract<CardElement, { type: "text" }>;
+
+// Текст элемента с подставленными значениями, разбитый на куски текста и иконки.
+function textParts(el: TextEl, data: CardData): TextPart[] {
+  const filled = fillPlaceholders(el.text, data);
+  const parts: TextPart[] = [];
+  let last = 0;
+  for (const m of filled.matchAll(/\{(\w+)_icon\}/g)) {
+    const key = m[1]!;
+    if (!isCardIcon(key)) continue;
+    if (m.index > last) parts.push({ text: filled.slice(last, m.index) });
+    parts.push({ icon: key });
+    last = m.index + m[0].length;
+  }
+  if (last < filled.length) parts.push({ text: filled.slice(last) });
+  if (!el.uppercase) return parts;
+  return parts.map((p) => ("text" in p ? { text: p.text.toLocaleUpperCase("ru-RU") } : p));
+}
+
+// Иконка чуть крупнее заглавной буквы, чтобы читалась рядом с цифрами.
+const iconSize = (fontSize: number) => Math.round(fontSize * 1.35);
+
+function partWidths(ctx: Ctx2D, parts: TextPart[], fontSize: number): number[] {
+  return parts.map((p) => ("text" in p ? ctx.measureText(p.text).width : iconSize(fontSize)));
+}
+
+const onlyText = (parts: TextPart[]): parts is [{ text: string }] => parts.length === 1 && "text" in parts[0]!;
+
 function drawElement(ctx: Ctx2D, el: CardElement, data: CardData, images: CardImages) {
   switch (el.type) {
     case "rect": {
@@ -200,11 +232,9 @@ function drawElement(ctx: Ctx2D, el: CardElement, data: CardData, images: CardIm
       return;
     }
     case "text": {
-      let text = fillPlaceholders(el.text, data);
-      if (el.uppercase) text = text.toLocaleUpperCase("ru-RU");
-      if (!text) return;
+      const parts = textParts(el, data);
+      if (parts.length === 0) return;
       ctx.font = cardFontString(el.font, el.weight, el.size);
-      ctx.textAlign = el.align;
       ctx.textBaseline = "top";
       ctx.fillStyle = el.color;
       if (el.shadow) {
@@ -212,7 +242,26 @@ function drawElement(ctx: Ctx2D, el: CardElement, data: CardData, images: CardIm
         ctx.shadowBlur = Math.round(el.size / 4);
         ctx.shadowOffsetY = Math.max(1, Math.round(el.size / 16));
       }
-      ctx.fillText(ellipsize(ctx, text, el.maxWidth), el.x, el.y);
+      if (onlyText(parts)) {
+        ctx.textAlign = el.align;
+        ctx.fillText(ellipsize(ctx, parts[0].text, el.maxWidth), el.x, el.y);
+        return;
+      }
+      // С иконками текст рисуется кусками слева направо; обрезка по ширине к нему не применяется.
+      ctx.textAlign = "left";
+      const widths = partWidths(ctx, parts, el.size);
+      const total = widths.reduce((s, w) => s + w, 0);
+      let x = el.align === "left" ? el.x : el.align === "center" ? el.x - total / 2 : el.x - total;
+      const size = iconSize(el.size);
+      const iconY = el.y + Math.round(el.size * 0.58 - size / 2);
+      parts.forEach((p, i) => {
+        if ("text" in p) ctx.fillText(p.text, x, el.y);
+        else {
+          const img = images.icons?.get(p.icon);
+          if (img) drawFitted(ctx, img, x, iconY, size, size, "contain");
+        }
+        x += widths[i]!;
+      });
       return;
     }
     case "badges": {
@@ -276,10 +325,11 @@ export function elementBounds(ctx: Ctx2D, el: CardElement, data: CardData): { x:
     case "avatar":
       return { x: el.x, y: el.y, w: el.size, h: el.size };
     case "text": {
-      let text = fillPlaceholders(el.text, data);
-      if (el.uppercase) text = text.toLocaleUpperCase("ru-RU");
+      const parts = textParts(el, data);
       ctx.font = cardFontString(el.font, el.weight, el.size);
-      const w = Math.max(20, Math.min(ctx.measureText(text || " ").width, el.maxWidth > 0 ? el.maxWidth : Infinity));
+      const natural = partWidths(ctx, parts, el.size).reduce((s, w) => s + w, 0);
+      const limit = el.maxWidth > 0 && (parts.length === 0 || onlyText(parts)) ? el.maxWidth : Infinity;
+      const w = Math.max(20, Math.min(natural, limit));
       const x = el.align === "left" ? el.x : el.align === "center" ? el.x - w / 2 : el.x - w;
       return { x, y: el.y, w, h: Math.round(el.size * 1.2) };
     }

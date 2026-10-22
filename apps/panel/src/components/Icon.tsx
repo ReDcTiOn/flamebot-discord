@@ -30,8 +30,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { IconName } from "@/modules";
+import { ScrapIcon } from "./ScrapIcon";
 
-const ICONS: Record<IconName, LucideIcon> = {
+const ICONS: Record<Exclude<IconName, "scrap">, LucideIcon> = {
   dashboard: LayoutDashboard,
   trending: TrendingUp,
   thumb: ThumbsUp,
@@ -63,6 +64,7 @@ const ICONS: Record<IconName, LucideIcon> = {
 };
 
 export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
+  if (name === "scrap") return <ScrapIcon size={Math.round(size * 1.25)} alt="" />;
   const Component = ICONS[name];
   return <Component size={size} aria-hidden="true" strokeWidth={1.8} />;
 }

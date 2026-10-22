@@ -17,7 +17,8 @@ import type { Command } from "./types.js";
 const CATEGORIES = {
   xp: { title: "по опыту", button: "Опыт", emoji: "✨", unit: "опыта", field: "xp" },
   rep: { title: "по репутации", button: "Репутация", emoji: "👍", unit: "репутации", field: "rep" },
-  scrap: { title: "по скрапу", button: "Скрап", emoji: SCRAP, unit: "скрапа", field: "scrap" },
+  // У скрапа вместо слова — иконка, она уже стоит перед числом.
+  scrap: { title: "по скрапу", button: "Скрап", emoji: SCRAP, unit: "", field: "scrap" },
 } as const;
 
 type Category = keyof typeof CATEGORIES;
@@ -53,7 +54,7 @@ export async function buildTop(category: Category, viewerId: string, guildName: 
 
   // Первые три места — крупно и с аватаром.
   rows.slice(0, 3).forEach((r, i) => {
-    const value = `**${formatNumber(r[c.field])}** ${c.unit}`;
+    const value = `**${formatNumber(r[c.field])}** ${c.unit}`.trimEnd();
     const level = `${levelFromExp(r.xp)} ур.`;
     const extra = category === "xp" ? `${level} · ${rankLabel(r.rank ?? ranks[0])}` : `${level} · ${rankLabel(r.rank)} · ${formatNumber(r.xp)} опыта`;
     container.addSectionComponents(
@@ -77,7 +78,7 @@ export async function buildTop(category: Category, viewerId: string, guildName: 
     const place = (await prisma.member.count({ where: { inGuild: true, [c.field]: { gt: me[c.field] } } })) + 1;
     container
       .addSeparatorComponents(divider())
-      .addTextDisplayComponents(text(`-# Твоё место: **#${place}** · ${formatNumber(me[c.field])} ${c.unit}`));
+      .addTextDisplayComponents(text(`-# Твоё место: **#${place}** · ${formatNumber(me[c.field])} ${c.unit || c.emoji}`));
   }
 
   container.addActionRowComponents(

@@ -5,6 +5,7 @@ import { AutoRefresh } from "@/components/AutoRefresh";
 import { BotPower } from "@/components/BotPower";
 import { getBotStates } from "@/lib/botState";
 import { PageHead } from "@/components/Fields";
+import { ScrapIcon } from "@/components/ScrapIcon";
 
 export const metadata = { title: "Рейтинг участников" };
 
@@ -67,7 +68,7 @@ export default async function RatingOverview() {
         <div className="metric"><div className="metric-label">Участников в рейтинге</div><div className="metric-value">{formatNumber(members)}</div></div>
         <div className="metric"><div className="metric-label">Активны сегодня</div><div className="metric-value">{formatNumber(activeToday)}</div></div>
         <div className="metric"><div className="metric-label">Опыта за сегодня</div><div className="metric-value">{formatNumber(todayStat?.xpAwarded ?? 0)}</div></div>
-        <div className="metric"><div className="metric-label">Скрапа на руках</div><div className="metric-value">{formatNumber(scrap._sum.scrap ?? 0)}</div></div>
+        <div className="metric"><div className="metric-label">Скрапа на руках</div><div className="metric-value">{formatNumber(scrap._sum.scrap ?? 0)} <ScrapIcon /></div></div>
       </div>
 
       <div className="grid grid-2">

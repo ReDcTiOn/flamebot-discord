@@ -14,7 +14,16 @@ import {
   shopItemSchema,
   xpSettingsSchema,
 } from "@flamebot/core";
-import { cardAssetIds, cardLayoutSchema } from "@flamebot/core/card";
+import {
+  CARD_FILE_FORMAT,
+  CARD_FILE_MAX_BYTES,
+  cardAssetIds,
+  cardFileSchema,
+  cardLayoutSchema,
+  remapCardAssets,
+  type CardFile,
+  type CardLayout,
+} from "@flamebot/core/card";
 import { ActionError, audit, runAction, type ActionResult } from "@/lib/auth";
 import { sanitizeImage } from "@/lib/images";
 import { rateLimit } from "@/lib/rateLimit";
@@ -262,32 +271,152 @@ export async function resetMember(_prev: ActionResult, fd: FormData): Promise<Ac
 
 // ---------- Карточка профиля ----------
 
+function parseLayout(json: string): CardLayout {
+  if (typeof json !== "string" || json.length > 200_000) throw new ActionError("Шаблон слишком большой");
+  let raw: unknown;
+  try {
+    raw = JSON.parse(json);
+  } catch {
+    throw new ActionError("Шаблон повреждён");
+  }
+  const layout = cardLayoutSchema.parse(raw);
+  const ids = new Set(layout.elements.map((e) => e.id));
+  if (ids.size !== layout.elements.length) throw new ActionError("У элементов повторяются идентификаторы");
+  return layout;
+}
+
+async function assertCardAssets(layout: CardLayout) {
+  const assetIds = cardAssetIds(layout);
+  const found = await prisma.cardAsset.count({ where: { id: { in: assetIds } } });
+  if (found !== assetIds.length) throw new ActionError("Одна из картинок не найдена. Загрузи её заново.");
+}
+
+// Картинки, которые не нужны ни текущей карточке, ни сохранённым и загружены давно, удаляем.
+async function cleanupCardAssets(current: CardLayout) {
+  const keep = new Set(cardAssetIds(current));
+  for (const preset of await prisma.cardPreset.findMany({ select: { layout: true } })) {
+    const parsed = cardLayoutSchema.safeParse(preset.layout);
+    if (parsed.success) for (const id of cardAssetIds(parsed.data)) keep.add(id);
+  }
+  await prisma.cardAsset.deleteMany({
+    where: { id: { notIn: [...keep] }, createdAt: { lt: new Date(Date.now() - 24 * 3_600_000) } },
+  });
+}
+
 export async function saveCardLayout(json: string): Promise<ActionResult> {
   return runAction("any", async (user) => {
-    if (typeof json !== "string" || json.length > 200_000) throw new ActionError("Шаблон слишком большой");
-    let raw: unknown;
-    try {
-      raw = JSON.parse(json);
-    } catch {
-      throw new ActionError("Шаблон повреждён");
-    }
-    const layout = cardLayoutSchema.parse(raw);
-    const ids = new Set(layout.elements.map((e) => e.id));
-    if (ids.size !== layout.elements.length) throw new ActionError("У элементов повторяются идентификаторы");
-
-    const assetIds = cardAssetIds(layout);
-    const found = await prisma.cardAsset.count({ where: { id: { in: assetIds } } });
-    if (found !== assetIds.length) throw new ActionError("Одна из картинок не найдена. Загрузи её заново.");
-
+    const layout = parseLayout(json);
+    await assertCardAssets(layout);
     await prisma.profileCard.upsert({ where: { id: 1 }, create: { id: 1, layout }, update: { layout } });
-    // Картинки, которые больше нигде не используются и загружены давно, удаляем.
-    await prisma.cardAsset.deleteMany({
-      where: { id: { notIn: assetIds }, createdAt: { lt: new Date(Date.now() - 24 * 3_600_000) } },
-    });
-    await audit(user, MODULE, "card.update", null, { elements: layout.elements.length, assets: assetIds });
+    await cleanupCardAssets(layout);
+    await audit(user, MODULE, "card.update", null, { elements: layout.elements.length, assets: cardAssetIds(layout) });
     revalidatePath("/rating/card");
     return "Карточка сохранена. Бот начнёт рисовать её в течение 15 секунд.";
   });
+}
+
+// ---------- Сохранённые карточки и файлы ----------
+
+const MAX_CARD_PRESETS = 50;
+
+export async function saveCardPreset(name: string, json: string): Promise<ActionResult> {
+  return runAction("any", async (user) => {
+    const title = typeof name === "string" ? name.trim() : "";
+    if (!title) throw new ActionError("Напиши название");
+    if (title.length > 40) throw new ActionError("Название длиннее 40 символов");
+    const layout = parseLayout(json);
+    await assertCardAssets(layout);
+    const existing = await prisma.cardPreset.findUnique({ where: { name: title }, select: { id: true } });
+    if (!existing && (await prisma.cardPreset.count()) >= MAX_CARD_PRESETS) {
+      throw new ActionError(`Сохранить можно не больше ${MAX_CARD_PRESETS} карточек. Удали ненужные.`);
+    }
+    await prisma.cardPreset.upsert({ where: { name: title }, create: { name: title, layout }, update: { layout } });
+    await audit(user, MODULE, existing ? "card.preset.update" : "card.preset.create", title, { elements: layout.elements.length });
+    revalidatePath("/rating/card");
+    return existing ? `Карточка «${title}» перезаписана.` : `Карточка «${title}» сохранена.`;
+  });
+}
+
+export async function deleteCardPreset(id: number): Promise<ActionResult> {
+  return runAction("any", async (user) => {
+    if (!Number.isInteger(id) || id <= 0) throw new ActionError("Карточка не найдена");
+    const preset = await prisma.cardPreset.findUnique({ where: { id }, select: { name: true } });
+    if (!preset) throw new ActionError("Карточка уже удалена");
+    await prisma.cardPreset.delete({ where: { id } });
+    await audit(user, MODULE, "card.preset.delete", preset.name);
+    revalidatePath("/rating/card");
+    return `Карточка «${preset.name}» удалена.`;
+  });
+}
+
+export type CardFileResult = { ok: boolean; message: string; file?: string };
+
+// Собирает файл карточки: шаблон и картинки из базы в base64.
+export async function exportCardFile(name: string, json: string): Promise<CardFileResult> {
+  let file: string | undefined;
+  const result = await runAction("any", async () => {
+    const layout = parseLayout(json);
+    const assets = await prisma.cardAsset.findMany({ where: { id: { in: cardAssetIds(layout) } } });
+    const content: CardFile = {
+      format: CARD_FILE_FORMAT,
+      version: 1,
+      name: typeof name === "string" && name.trim() ? name.trim().slice(0, 40) : undefined,
+      exportedAt: new Date().toISOString(),
+      layout,
+      assets: assets.map((a) => ({ id: a.id, mime: a.mime, data: Buffer.from(a.data).toString("base64") })),
+    };
+    file = JSON.stringify(content, null, 2);
+    return "Файл готов.";
+  });
+  return { ok: result?.ok ?? false, message: result?.message ?? "Не получилось собрать файл", file };
+}
+
+export type CardImportResult = { ok: boolean; message: string; layout?: CardLayout; name?: string };
+
+// Читает файл карточки: картинки проверяются и сохраняются заново, шаблон открывается в редакторе.
+// Карточку бота это не меняет, пока её не сохранят.
+export async function importCardFile(fd: FormData): Promise<CardImportResult> {
+  let layout: CardLayout | undefined;
+  let name: string | undefined;
+  const result = await runAction("any", async (user) => {
+    if (!rateLimit(`upload:${user.id}`, 20, 10 * 60_000)) throw new ActionError("Слишком много загрузок. Подожди несколько минут.");
+    const file = fd.get("file");
+    if (!(file instanceof File)) throw new ActionError("Выбери файл");
+    if (file.size === 0) throw new ActionError("Файл пустой");
+    if (file.size > CARD_FILE_MAX_BYTES) throw new ActionError("Файл больше 15 МБ");
+
+    let raw: unknown;
+    try {
+      raw = JSON.parse(await file.text());
+    } catch {
+      throw new ActionError("Это не файл карточки: внутри не JSON");
+    }
+    // Голый шаблон без картинок тоже принимаем: его можно прислать текстом.
+    const wrapped = raw && typeof raw === "object" && "format" in raw ? raw : { format: CARD_FILE_FORMAT, version: 1, layout: raw };
+    const parsedFile = cardFileSchema.safeParse(wrapped);
+    if (!parsedFile.success) throw new ActionError("Это не файл карточки FlameBot или он из другой версии");
+    const parsedLayout = cardLayoutSchema.safeParse(parsedFile.data.layout);
+    if (!parsedLayout.success) throw new ActionError(`Шаблон в файле повреждён: ${parsedLayout.error.issues[0]?.message ?? "ошибка"}`);
+
+    const needed = new Set(cardAssetIds(parsedLayout.data));
+    const map = new Map<number, number>();
+    for (const asset of parsedFile.data.assets) {
+      if (!needed.has(asset.id) || map.has(asset.id)) continue;
+      const img = await sanitizeImage(new File([Buffer.from(asset.data, "base64")], `card-${asset.id}`, { type: asset.mime }));
+      const row = await prisma.cardAsset.create({
+        data: { mime: img.mime, width: img.width, height: img.height, size: img.data.length, data: new Uint8Array(img.data) },
+        select: { id: true },
+      });
+      map.set(asset.id, row.id);
+    }
+    layout = remapCardAssets(parsedLayout.data, map);
+    name = parsedFile.data.name || undefined;
+    const lost = needed.size - map.size;
+    await audit(user, MODULE, "card.import", name ?? file.name.slice(0, 80), { elements: layout.elements.length, assets: map.size, lost });
+    const tail = lost > 0 ? ` Картинок в файле не хватило: ${lost}, их места пустые.` : "";
+    return `Карточка из файла открыта в редакторе. Чтобы бот рисовал её, нажми «Сохранить».${tail}`;
+  });
+  return { ok: result?.ok ?? false, message: result?.message ?? "Не получилось прочитать файл", layout, name };
 }
 
 export async function saveProfileCardEnabled(_prev: ActionResult, fd: FormData): Promise<ActionResult> {
