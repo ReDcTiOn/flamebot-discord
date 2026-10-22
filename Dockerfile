@@ -8,7 +8,7 @@
 #   notice-bot — бот объявлений о вайпах (Telegram, Discord, ВКонтакте, gamestores)
 #   panel      — веб-панель
 
-FROM node:22-alpine AS deps
+FROM node:25-alpine AS deps
 RUN apk add --no-cache openssl && corepack enable
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
@@ -33,7 +33,7 @@ COPY apps apps
 RUN chmod -R a+rX package.json pnpm-workspace.yaml packages apps
 RUN pnpm -F @flamebot/core build && pnpm -F link-bot build && pnpm -F rating-bot build && pnpm -F online-bot build && pnpm -F giveaway-bot build && pnpm -F maps-bot build && pnpm -F notice-bot build && pnpm -F panel build
 
-FROM node:22-alpine AS link-bot
+FROM node:25-alpine AS link-bot
 RUN apk add --no-cache openssl
 ENV NODE_ENV=production
 WORKDIR /app
@@ -51,7 +51,7 @@ EXPOSE 3010
 WORKDIR /app/apps/link-bot
 CMD ["node", "dist/index.js"]
 
-FROM node:22-alpine AS rating-bot
+FROM node:25-alpine AS rating-bot
 RUN apk add --no-cache openssl
 ENV NODE_ENV=production
 WORKDIR /app
@@ -68,7 +68,7 @@ USER node
 WORKDIR /app/apps/rating-bot
 CMD ["node", "dist/index.js"]
 
-FROM node:22-alpine AS online-bot
+FROM node:25-alpine AS online-bot
 RUN apk add --no-cache openssl
 ENV NODE_ENV=production
 WORKDIR /app
@@ -85,7 +85,7 @@ USER node
 WORKDIR /app/apps/online-bot
 CMD ["node", "dist/index.js"]
 
-FROM node:22-alpine AS giveaway-bot
+FROM node:25-alpine AS giveaway-bot
 RUN apk add --no-cache openssl
 ENV NODE_ENV=production
 WORKDIR /app
@@ -102,7 +102,7 @@ USER node
 WORKDIR /app/apps/giveaway-bot
 CMD ["node", "dist/index.js"]
 
-FROM node:22-alpine AS maps-bot
+FROM node:25-alpine AS maps-bot
 RUN apk add --no-cache openssl
 ENV NODE_ENV=production
 WORKDIR /app
@@ -119,7 +119,7 @@ USER node
 WORKDIR /app/apps/maps-bot
 CMD ["node", "dist/index.js"]
 
-FROM node:22-alpine AS notice-bot
+FROM node:25-alpine AS notice-bot
 RUN apk add --no-cache openssl
 ENV NODE_ENV=production
 WORKDIR /app
@@ -136,7 +136,7 @@ USER node
 WORKDIR /app/apps/notice-bot
 CMD ["node", "dist/index.js"]
 
-FROM node:22-alpine AS panel
+FROM node:25-alpine AS panel
 RUN apk add --no-cache openssl
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 WORKDIR /app
