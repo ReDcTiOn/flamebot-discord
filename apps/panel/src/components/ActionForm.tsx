@@ -110,14 +110,16 @@ export function SubmitButton({
   children,
   variant = "primary",
   pendingText = "Сохраняю…",
+  disabled = false,
 }: {
   children: ReactNode;
   variant?: "primary" | "secondary" | "danger" | "danger-solid";
   pendingText?: string;
+  disabled?: boolean;
 }) {
   const pending = useContext(PendingContext);
   return (
-    <button type="submit" className={`btn ${variant}`} disabled={pending} aria-busy={pending}>
+    <button type="submit" className={`btn ${variant}`} disabled={pending || disabled} aria-busy={pending}>
       {pending ? pendingText : children}
     </button>
   );

@@ -100,6 +100,8 @@ model Member {
   rank         Rank?     @relation(fields: [rankId], references: [id], onDelete: SetNull)
   // Награда за ранг выдаётся один раз: за ранги с порогом выше этого значения.
   rewardedUpToXp Int     @default(0)
+  // Скрап за ранги, выданный кнопкой «Выдать награды за ранги» тем, кому их отметили без выплаты.
+  rankScrapGranted Int   @default(0)
   // Панель ставит флаг, когда меняет опыт или ранги; бот пересчитывает роли в фоне.
   needsRoleSync Boolean  @default(false)
   // Импорт ставит флаг, а бот проверяет, есть ли человек на сервере, и обновляет имя. Роли не трогает.

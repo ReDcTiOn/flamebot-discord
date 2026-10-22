@@ -212,6 +212,7 @@ option:disabled { color: var(--text-muted); }
 }
 .btn:hover { background: var(--surface-3); }
 .btn:disabled { opacity: 0.6; cursor: progress; }
+.btn:disabled:not([aria-busy="true"]) { opacity: 0.45; cursor: not-allowed; }
 .btn.primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
 .btn.primary:hover { background: var(--primary-hover); }
 .btn.danger { color: var(--danger); background: transparent; }
@@ -560,3 +561,4 @@ a.member-link:hover { color: #7fb0ff; }
 
 /* Иконка скрапа вместо слова: размером чуть больше строки, по центру текста. */
 .scrap-icon { display: inline-block; width: 1.3em; height: 1.3em; object-fit: contain; vertical-align: -0.32em; }
+.grant-ranks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }

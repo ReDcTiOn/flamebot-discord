@@ -81,6 +81,7 @@ const ACTIONS: Record<string, string> = {
   "card.preset.delete": "Удалил вариант карточки",
   "card.import": "Загрузил карточку из файла",
   "member.import": "Перенёс опыт из JuniperBot",
+  "member.rank_scrap": "Выдал награды за ранги задним числом",
   "customrole.settings": "Изменил проверку личных ролей",
   "customrole.approve": "Одобрил личную роль",
   "customrole.reject": "Отклонил личную роль",

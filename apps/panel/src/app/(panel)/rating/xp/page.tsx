@@ -1,5 +1,5 @@
 import { Plus, Trash2 } from "lucide-react";
-import { formatNumber, getRatingSettings, levelTotalExp, messageReward, prisma, type Rank } from "@flamebot/core";
+import { formatNumber, getRatingSettings, levelTotalExp, messageReward, planRankScrapGrant, plural, prisma, type Rank } from "@flamebot/core";
 import { ActionForm, IconSubmit, SubmitButton } from "@/components/ActionForm";
 import { EmojiPicker } from "@/components/EmojiPicker";
 import { ExpandableRow } from "@/components/ui/ExpandableRow";
@@ -7,7 +7,7 @@ import { EmptyState, FieldRow, NumberInput, PageHead, RoleSelect, Section, Switc
 import { ModalCancel, ModalTrigger } from "@/components/ui/Modal";
 import { requirePage } from "@/lib/auth";
 import { listRoles } from "@/lib/guild";
-import { createRank, deleteRank, saveXpSettings, updateRank } from "../actions";
+import { createRank, deleteRank, grantRankScrap, saveXpSettings, updateRank } from "../actions";
 import { ScrapIcon } from "@/components/ScrapIcon";
 
 export const metadata = { title: "Опыт и ранги" };
@@ -73,10 +73,11 @@ function RankFields({ roles, rank, defaults }: { roles: Roles; rank?: Rank; defa
 export default async function XpPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   await requirePage();
   const tab = pickTab((await searchParams).tab, TABS.map((t) => t.key));
-  const [s, ranks, roles] = await Promise.all([
+  const [s, ranks, roles, grant] = await Promise.all([
     getRatingSettings(prisma),
     prisma.rank.findMany({ orderBy: { minXp: "asc" } }),
     listRoles(),
+    tab === "ranks" ? planRankScrapGrant(prisma) : null,
   ]);
 
   const roleName = new Map(roles.map((r) => [r.id, r.name]));
@@ -247,6 +248,39 @@ export default async function XpPage({ searchParams }: { searchParams: Promise<{
               </div>
             )}
           </Section>
+
+          {grant && (grant.rows.length > 0 || grant.pendingChecks > 0) && (
+            <Section
+              title="Награды за ранги задним числом"
+              hint="Перенос из JuniperBot отметил ранги пройденными, но скрап за них не начислил. Каждый получит награды за все свои ранги, минус то, что бот уже выдал сам. Повторная выдача даёт только разницу."
+            >
+              <ActionForm
+                action={grantRankScrap}
+                confirm="Выдать награды за ранги?"
+                confirmMessage={`${grant.rows.length.toLocaleString("ru-RU")} ${plural(grant.rows.length, "участник получит", "участника получат", "участников получат")} всего ${grant.total.toLocaleString("ru-RU")} скрапа. Отменить нельзя.`}
+                confirmLabel="Выдать"
+              >
+                <div className="tiles group">
+                  <FieldRow
+                    icon="scrap"
+                    label={`${plural(grant.rows.length, "Получит", "Получат", "Получат")} ${grant.rows.length.toLocaleString("ru-RU")} ${plural(grant.rows.length, "участник", "участника", "участников")}, всего ${grant.total.toLocaleString("ru-RU")} скрапа`}
+                    hint={grant.pendingChecks > 0 ? `Бот ещё проверяет перенесённых участников, осталось ${grant.pendingChecks.toLocaleString("ru-RU")}: их опыт может подрасти до роли. Кнопка заработает после проверки.` : undefined}
+                  >
+                    <SubmitButton disabled={grant.pendingChecks > 0} pendingText="Выдаю…">Выдать</SubmitButton>
+                  </FieldRow>
+                </div>
+              </ActionForm>
+              {grant.byRank.length > 0 && (
+                <div className="grant-ranks">
+                  {grant.byRank.map((g) => (
+                    <span key={g.rankId} className="chip">
+                      {g.name}: {g.members.toLocaleString("ru-RU")} чел. · {g.scrap.toLocaleString("ru-RU")} <ScrapIcon />
+                    </span>
+                  ))}
+                </div>
+              )}
+            </Section>
+          )}
         </>
       )}
     </>

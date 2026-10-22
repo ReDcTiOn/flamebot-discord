@@ -2,11 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import {
+  applyRankScrapGrant,
   channelSettingsSchema,
   customRoleSettingsSchema,
   levelTotalExp,
   memberAdjustSchema,
   messageSettingsSchema,
+  planRankScrapGrant,
   prisma,
   rankSchema,
   round2,
@@ -266,6 +268,23 @@ export async function resetMember(_prev: ActionResult, fd: FormData): Promise<Ac
     });
     revalidatePath("/rating/members", "layout");
     return `Игрок ${before.displayName} обнулён.`;
+  });
+}
+
+// Награды за ранги тем, кому ранги отметили без выплаты (перенос из JuniperBot, проверка участников).
+export async function grantRankScrap(_prev: ActionResult, _fd: FormData): Promise<ActionResult> {
+  return runAction("any", async (user) => {
+    const plan = await planRankScrapGrant(prisma);
+    if (plan.pendingChecks > 0) throw new ActionError(`Бот ещё проверяет перенесённых участников, осталось ${plan.pendingChecks}. Выдай награды, когда проверка закончится.`);
+    if (plan.rows.length === 0) throw new ActionError("Выдавать нечего: все уже получили награды за свои ранги.");
+    const done = await applyRankScrapGrant(prisma, plan);
+    await audit(user, MODULE, "member.rank_scrap", `получателей: ${done.members}`, {
+      members: done.members,
+      total: done.total,
+      byRank: plan.byRank.map((g) => ({ rank: g.name, members: g.members, scrap: g.scrap })),
+    });
+    revalidatePath("/rating", "layout");
+    return `Выдано ${done.total.toLocaleString("ru-RU")} скрапа, получателей: ${done.members.toLocaleString("ru-RU")}.`;
   });
 }
 
