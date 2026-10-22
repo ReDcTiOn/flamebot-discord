@@ -1,19 +1,75 @@
-import { AttachmentBuilder, EmbedBuilder, Locale, MessageFlags, SlashCommandBuilder, escapeMarkdown } from "discord.js";
+import {
+  AttachmentBuilder,
+  ContainerBuilder,
+  Locale,
+  MediaGalleryBuilder,
+  MediaGalleryItemBuilder,
+  MessageFlags,
+  SlashCommandBuilder,
+  escapeMarkdown,
+} from "discord.js";
 import { formatNumber, levelProgress, prisma, rankProgress } from "@flamebot/core";
-import { stripEmoji } from "@flamebot/core/card";
+import { profileTexts, purchasesBlock, stripEmoji, type ProfilePurchase } from "@flamebot/core/card";
 import { log } from "../logger.js";
 import { getState } from "../state.js";
 import { renderProfileCard } from "../services/card.js";
 import { ensureMember, topPosition } from "../services/members.js";
-import { SCRAP } from "../ui.js";
+import { SCRAP, UI, V2, divider, serverEmojis, text } from "../ui.js";
 import { progressBar } from "../util.js";
-import { COLORS, type Command } from "./types.js";
+import type { Command } from "./types.js";
+
+// Что у игрока куплено: действующие роли, заявки на проверке и бейджи, которые у него ещё есть.
+async function activePurchases(memberId: string, badgeLabels: string[]): Promise<ProfilePurchase[]> {
+  const rows = await prisma.purchase.findMany({
+    where: { memberId, OR: [{ active: true }, { request: { status: "PENDING" } }, { item: { type: "BADGE" } }] },
+    include: { item: true, request: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const badges = new Set(badgeLabels);
+  return rows.flatMap((p) => {
+    if (p.item.type === "BADGE" && !(p.item.badgeLabel && badges.has(p.item.badgeLabel))) return [];
+    const name = p.customName ? `${p.item.name} «${p.customName}»` : p.item.name;
+    return [{ item: escapeMarkdown(name), price: p.price, expiresAt: p.active ? p.expiresAt : null, pending: p.request?.status === "PENDING" }];
+  });
+}
+
+// Профиль текстом — если картинку выключили в панели или она не нарисовалась.
+function textProfile(o: {
+  name: string;
+  rank: string;
+  place: number;
+  xp: number;
+  nextName: string | null;
+  nextLevel: number | null;
+  nextXp: number | null;
+  scrap: number;
+  rep: number;
+  messages: number;
+  voiceSeconds: number;
+  badges: string[];
+}): string {
+  const lv = levelProgress(o.xp);
+  const next =
+    o.nextName && o.nextXp !== null
+      ? `До ранга «${escapeMarkdown(o.nextName)}» (${o.nextLevel} ур.): ${formatNumber(Math.max(0, o.nextXp - o.xp))} опыта`
+      : "Максимальный ранг";
+  const lines = [
+    `## ${escapeMarkdown(o.name)}`,
+    `**${o.rank}** · место в топе **#${o.place}**`,
+    `**Уровень ${lv.level}** · ${progressBar(lv.ratio)}  ${formatNumber(Math.floor(lv.into))} / ${formatNumber(lv.need)}`,
+    next,
+    `${SCRAP} ${formatNumber(o.scrap)} · Репутация: ${formatNumber(o.rep)} · Сообщений: ${formatNumber(o.messages)}`,
+    `Опыт: ${formatNumber(o.xp)} · В голосе: ${formatNumber(Math.round(o.voiceSeconds / 360) / 10)} ч`,
+  ];
+  if (o.badges.length > 0) lines.push(`Бейджи: ${o.badges.map((b) => `\`${escapeMarkdown(b)}\``).join(" ")}`);
+  return lines.join("\n");
+}
 
 export const profileCommand: Command = {
   data: new SlashCommandBuilder()
     .setName("profile")
     .setNameLocalizations({ [Locale.Russian]: "профиль" })
-    .setDescription("Профиль игрока: ранг, скрап, репутация")
+    .setDescription("Профиль игрока: ранг, скрап, репутация, покупки")
     .addUserOption((o) => o.setName("игрок").setDescription("Чей профиль показать").setRequired(false))
     .toJSON(),
 
@@ -33,9 +89,14 @@ export const profileCommand: Command = {
       topPosition(row.xp),
       prisma.memberBadge.findMany({ where: { memberId: user.id }, orderBy: { createdAt: "asc" } }),
     ]);
+    const badgeLabels = badges.map((b) => b.label);
+    const purchases = await activePurchases(user.id, badgeLabels);
 
     const { current, next, ratio } = rankProgress(ranks, row.xp);
     const displayName = guildMember?.displayName ?? user.globalName ?? user.username;
+    // Сверху карточка, под ней — что куплено и до какого числа.
+    const container = new ContainerBuilder().setAccentColor(UI.brand);
+    const files: AttachmentBuilder[] = [];
 
     if (settings.profileCardEnabled) {
       try {
@@ -53,39 +114,40 @@ export const profileCommand: Command = {
             messages: row.messageCount,
             place,
             server: interaction.guild.name,
-            badges: badges.map((b) => b.label),
+            badges: badgeLabels,
           },
           user.displayAvatarURL({ extension: "png", size: 256, forceStatic: true }),
         );
-        await interaction.editReply({ files: [new AttachmentBuilder(png, { name: "profile.png" })] });
-        return;
+        files.push(new AttachmentBuilder(png, { name: "profile.png" }));
+        container.addMediaGalleryComponents(new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL("attachment://profile.png")));
       } catch (err) {
-        // Если картинка не нарисовалась, показываем текстовую карточку.
+        // Если картинка не нарисовалась, показываем профиль текстом.
         log.error("Не удалось нарисовать карточку профиля", err);
       }
     }
-
-    const rankLabel = current ? `${current.emoji ?? ""} ${escapeMarkdown(current.name)}`.trim() : "Без ранга";
-    // Как в JuniperBot: прогресс текущего уровня, ниже — сколько до следующего ранга.
-    const lv = levelProgress(row.xp);
-    const progressLine =
-      `**Уровень ${lv.level}** · ${progressBar(lv.ratio)}  ${formatNumber(Math.floor(lv.into))} / ${formatNumber(lv.need)}\n` +
-      (next ? `До ранга «${escapeMarkdown(next.name)}» (${next.minLevel} ур.): ${formatNumber(Math.max(0, next.minXp - row.xp))} опыта` : "Максимальный ранг");
-
-    const embed = new EmbedBuilder()
-      .setColor(COLORS.brand)
-      .setAuthor({ name: escapeMarkdown(displayName), iconURL: user.displayAvatarURL() })
-      .setDescription(`**${rankLabel}** · место в топе **#${place}**\n\n${progressLine}`)
-      .addFields(
-        { name: "Скрап", value: `${SCRAP} ${formatNumber(row.scrap)}`, inline: true },
-        { name: "Репутация", value: formatNumber(row.rep), inline: true },
-        { name: "Сообщений засчитано", value: formatNumber(row.messageCount), inline: true },
-        { name: "Опыт", value: formatNumber(row.xp), inline: true },
-        { name: "В голосе", value: `${formatNumber(Math.round(row.voiceSeconds / 360) / 10)} ч`, inline: true },
+    if (files.length === 0) {
+      container.addTextDisplayComponents(
+        text(
+          textProfile({
+            name: displayName,
+            rank: current ? `${current.emoji ?? ""} ${escapeMarkdown(current.name)}`.trim() : "Без ранга",
+            place,
+            xp: row.xp,
+            nextName: next?.name ?? null,
+            nextLevel: next?.minLevel ?? null,
+            nextXp: next?.minXp ?? null,
+            scrap: row.scrap,
+            rep: row.rep,
+            messages: row.messageCount,
+            voiceSeconds: row.voiceSeconds,
+            badges: badgeLabels,
+          }),
+        ),
       );
-    if (badges.length > 0) {
-      embed.addFields({ name: "Бейджи", value: badges.map((b) => `\`${escapeMarkdown(b.label)}\``).join(" ").slice(0, 1024) });
     }
-    await interaction.editReply({ embeds: [embed] });
+
+    const block = serverEmojis(purchasesBlock(profileTexts(settings.profileTexts), purchases), interaction.guild);
+    container.addSeparatorComponents(divider()).addTextDisplayComponents(text(block));
+    await interaction.editReply({ components: [container], files, flags: V2, allowedMentions: { parse: [] } });
   },
 };

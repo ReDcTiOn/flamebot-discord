@@ -562,3 +562,12 @@ a.member-link:hover { color: #7fb0ff; }
 /* Иконка скрапа вместо слова: размером чуть больше строки, по центру текста. */
 .scrap-icon { display: inline-block; width: 1.3em; height: 1.3em; object-fit: contain; vertical-align: -0.32em; }
 .grant-ranks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.profile-texts { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 900px) { .profile-texts { grid-template-columns: minmax(0, 1fr); } }
+.dc-profile { white-space: normal; line-height: 1.6; }
+.dc-profile .dc-h1 { font-size: 20px; font-weight: 700; }
+.dc-profile .dc-h2 { font-size: 17px; font-weight: 700; }
+.dc-profile .dc-h3 { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
+.dc-profile .dc-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+.dc-time { background: var(--surface-3); border-radius: 3px; padding: 0 3px; white-space: nowrap; }
+.dc-emoji { font-size: 12px; color: var(--text-muted); font-family: var(--mono); }

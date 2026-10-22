@@ -60,6 +60,8 @@ model RatingSettings {
 
   // /profile картинкой (true) или текстовой карточкой (false).
   profileCardEnabled Boolean @default(true)
+  // Тексты под карточкой в /profile (список покупок); нет поля — стандартный текст.
+  profileTexts      Json     @default("{}")
 
   updatedAt DateTime @updatedAt
 }

@@ -1,8 +1,9 @@
 import { getCardLayout, getRatingSettings, prisma, rankProgress } from "@flamebot/core";
-import { DEFAULT_CARD_LAYOUT, cardLayoutSchema, stripEmoji, type CardData } from "@flamebot/core/card";
+import { DEFAULT_CARD_LAYOUT, cardLayoutSchema, profileTexts, stripEmoji, type CardData } from "@flamebot/core/card";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { CardEditor, type CardPresetItem } from "@/components/card/CardEditor";
-import { FieldRow, PageHead, Switch } from "@/components/Fields";
+import { ProfileTextsEditor } from "@/components/card/ProfileTexts";
+import { FieldRow, PageHead, Section, Switch } from "@/components/Fields";
 import { requirePage } from "@/lib/auth";
 import { avatarUrl } from "@/lib/discord";
 import { saveProfileCardEnabled } from "../actions";
@@ -66,6 +67,11 @@ export default async function CardPage() {
 
       <div style={{ height: 20 }} />
       <CardEditor initialLayout={cardLayoutSchema.parse(layout)} defaultLayout={DEFAULT_CARD_LAYOUT} data={data} avatarUrl={previewAvatar} presets={presets} />
+
+      <div style={{ height: 28 }} />
+      <Section title="Текст под карточкой" hint="Бот пишет его в /profile под картинкой: что куплено и когда закончится. Разметка как в Discord, :имя: — эмодзи сервера по названию.">
+        <ProfileTextsEditor initial={profileTexts(settings.profileTexts)} now={Date.now()} />
+      </Section>
     </>
   );
 }

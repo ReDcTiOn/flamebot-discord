@@ -75,6 +75,7 @@ const ACTIONS: Record<string, string> = {
   "bot.stop": "Остановил бота",
   "card.update": "Изменил карточку профиля",
   "card.toggle": "Переключил вид /profile",
+  "card.texts": "Изменил текст под карточкой профиля",
   "card.upload": "Загрузил картинку для карточки",
   "card.preset.create": "Сохранил вариант карточки",
   "card.preset.update": "Перезаписал вариант карточки",

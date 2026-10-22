@@ -7,6 +7,7 @@ import {
   SeparatorBuilder,
   SeparatorSpacingSize,
   TextDisplayBuilder,
+  type Guild,
   type MessageActionRowComponentBuilder,
 } from "discord.js";
 
@@ -23,6 +24,15 @@ export const UI = {
 
 // Эмодзи скрапа с сервера FlameRust. Бот должен быть на этом сервере, иначе Discord покажет текст.
 export const SCRAP = "<:flamerust_scrap:1555052599172923424>";
+
+// :имя: из текстов панели → эмодзи сервера с таким названием. Неизвестные имена и готовые
+// <:имя:id> остаются как есть.
+export function serverEmojis(content: string, guild: Guild): string {
+  return content.replace(/(<a?)?:(\w{2,32}):(\d+>)?/g, (m, open: string | undefined, name: string, close: string | undefined) => {
+    if (open || close) return m;
+    return guild.emojis.cache.find((e) => e.name === name)?.toString() ?? m;
+  });
+}
 
 export const V2 = MessageFlags.IsComponentsV2;
 export const V2_EPHEMERAL = MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral;

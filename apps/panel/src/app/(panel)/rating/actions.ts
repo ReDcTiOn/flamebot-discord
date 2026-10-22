@@ -19,9 +19,11 @@ import {
 import {
   CARD_FILE_FORMAT,
   CARD_FILE_MAX_BYTES,
+  PROFILE_TEXT_DEFAULTS,
   cardAssetIds,
   cardFileSchema,
   cardLayoutSchema,
+  profileTextsSchema,
   remapCardAssets,
   type CardFile,
   type CardLayout,
@@ -448,7 +450,18 @@ export async function saveProfileCardEnabled(_prev: ActionResult, fd: FormData):
   });
 }
 
-export type UploadResult = { ok: boolean; message: string; asset?: { id: number; width: number; height: number } };
+export async function saveProfileTexts(_prev: ActionResult, fd: FormData): Promise<ActionResult> {
+  return runAction("any", async (user) => {
+    const keys = Object.keys(PROFILE_TEXT_DEFAULTS) as (keyof typeof PROFILE_TEXT_DEFAULTS)[];
+    const profileTexts = profileTextsSchema.parse(Object.fromEntries(keys.map((k) => [k, str(fd, k)])));
+    await saveSettings({ profileTexts });
+    await audit(user, MODULE, "card.texts", null, profileTexts);
+    revalidatePath("/rating/card");
+    return "Тексты под карточкой сохранены. Бот начнёт их использовать в течение 15 секунд.";
+  });
+}
+
+export type UploadResult ={ ok: boolean; message: string; asset?: { id: number; width: number; height: number } };
 
 export async function uploadCardAsset(fd: FormData): Promise<UploadResult> {
   let asset: { id: number; width: number; height: number } | undefined;
