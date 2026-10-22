@@ -28,14 +28,17 @@ model PanelSettings {
 model RatingSettings {
   id Int @id @default(1)
 
-  // Значения по умолчанию для рангов, где своё начисление не задано. Точность — сотые.
-  // Стартовые значения — как настроено на FLAME RUST.
-  xpMin            Decimal @default(0.01) @db.Decimal(10, 2)
-  xpMax            Decimal @default(0.02) @db.Decimal(10, 2)
-  xpCooldownSec    Int     @default(5)
+  // Опыт за сообщение, как в JuniperBot: 15–24 не чаще раза в минуту. Целые границы — целый опыт.
+  // Ранг может задать своё начисление; null у ранга — эти значения.
+  xpMin            Decimal @default(15) @db.Decimal(10, 2)
+  xpMax            Decimal @default(24) @db.Decimal(10, 2)
+  xpCooldownSec    Int     @default(60)
   minMessageLength Int     @default(5)
   scrapPerAward    Decimal @default(0.03) @db.Decimal(10, 2)
-  voiceXpEnabled   Boolean @default(false)
+  // Опыт за голос, как в JuniperBot: каждую минуту voiceXpPerMember за каждого в канале
+  // с включённым микрофоном (считая себя), если таких хотя бы двое. AFK-канал не считается.
+  voiceXpEnabled   Boolean @default(true)
+  voiceXpPerMember Int     @default(6)
 
   announceRankUp    Boolean  @default(true)
   announceChannelId String?
@@ -65,6 +68,8 @@ model Rank {
   id          Int      @id @default(autoincrement())
   name        String
   emoji       String?
+  // Ранг даётся с уровня minLevel; minXp — опыт этого уровня по формуле JuniperBot (считается при сохранении).
+  minLevel    Int      @unique
   minXp       Int      @unique
   roleId      String?
   scrapReward Int      @default(0)

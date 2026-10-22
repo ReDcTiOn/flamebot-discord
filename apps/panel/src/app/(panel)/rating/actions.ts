@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import {
   channelSettingsSchema,
   customRoleSettingsSchema,
+  levelTotalExp,
   memberAdjustSchema,
   messageSettingsSchema,
   prisma,
@@ -26,9 +27,10 @@ async function saveSettings<T extends object>(data: T) {
   await prisma.ratingSettings.upsert({ where: { id: 1 }, create: { id: 1, ...data }, update: data });
 }
 
-// Ранги поменялись: бот в фоне пересчитает роли всем участникам.
+// Ранги поменялись: бот в фоне пересчитает роли всем участникам. Сначала проверка участника
+// подтянет опыт до роли ранга, которая у человека уже есть, — так никто не потеряет свою роль.
 async function queueRoleSyncForAll() {
-  await prisma.member.updateMany({ where: { inGuild: true }, data: { needsRoleSync: true } });
+  await prisma.member.updateMany({ where: { inGuild: true }, data: { needsRoleSync: true, needsMemberCheck: true } });
 }
 
 export async function saveXpSettings(_prev: ActionResult, fd: FormData): Promise<ActionResult> {
@@ -39,6 +41,8 @@ export async function saveXpSettings(_prev: ActionResult, fd: FormData): Promise
       xpCooldownSec: int(fd, "xpCooldownSec"),
       minMessageLength: int(fd, "minMessageLength"),
       scrapPerAward: dec(fd, "scrapPerAward"),
+      voiceXpEnabled: bool(fd, "voiceXpEnabled"),
+      voiceXpPerMember: int(fd, "voiceXpPerMember"),
       announceRankUp: bool(fd, "announceRankUp"),
       removeOldRankRoles: bool(fd, "removeOldRankRoles"),
     });
@@ -95,16 +99,18 @@ export async function saveMessageSettings(_prev: ActionResult, fd: FormData): Pr
 }
 
 function parseRank(fd: FormData) {
-  return rankSchema.parse({
+  const rank = rankSchema.parse({
     name: str(fd, "name"),
     emoji: strOrNull(fd, "emoji"),
-    minXp: int(fd, "minXp"),
+    minLevel: int(fd, "minLevel"),
     roleId: strOrNull(fd, "roleId"),
     scrapReward: int(fd, "scrapReward"),
     xpMin: decOrNull(fd, "xpMin"),
     xpMax: decOrNull(fd, "xpMax"),
     scrapPerMessage: decOrNull(fd, "scrapPerMessage"),
   });
+  // Порог опыта — опыт уровня по формуле JuniperBot.
+  return { ...rank, minXp: levelTotalExp(rank.minLevel) };
 }
 
 export async function createRank(_prev: ActionResult, fd: FormData): Promise<ActionResult> {

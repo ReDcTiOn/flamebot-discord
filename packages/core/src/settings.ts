@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { PanelSettings } from "@prisma/client";
 import type { Db } from "./db.js";
+import { levelTotalExp } from "./levels.js";
 import type { RatingSettings } from "./types.js";
 
 export const SNOWFLAKE = /^\d{17,20}$/;
@@ -24,6 +25,8 @@ export const xpSettingsSchema = z
     xpCooldownSec: z.number().int().min(5).max(3600),
     minMessageLength: z.number().int().min(0).max(500),
     scrapPerAward: hundredths(0, 1000),
+    voiceXpEnabled: z.boolean(),
+    voiceXpPerMember: z.number().int().min(0).max(1000),
     announceRankUp: z.boolean(),
     removeOldRankRoles: z.boolean(),
   })
@@ -66,7 +69,7 @@ export const rankSchema = z
   .object({
     name: z.string().trim().min(1).max(50),
     emoji: z.string().trim().max(32).nullable(),
-    minXp: z.number().int().min(0).max(100_000_000),
+    minLevel: z.number().int().min(1, "Уровень ранга — от 1").max(999, "Уровень ранга — до 999"),
     roleId: snowflake.nullable(),
     scrapReward: z.number().int().min(0).max(1_000_000),
     // Своё начисление за сообщение на этом ранге; null — как в общих настройках.
@@ -123,16 +126,27 @@ export async function getPanelSettings(db: Db): Promise<PanelSettings> {
 // Стартовые ранги FLAME RUST: создаются, только если в базе ещё нет ни одного ранга.
 // roleId — роли нашего Discord-сервера. На другом сервере таких ролей нет: бот их не выдаст,
 // запишет предупреждение в историю, а роли можно переназначить в панели.
-// xpMin/xpMax/scrapPerMessage — начисление за одно сообщение на этом ранге.
+// Ранг даётся с уровня minLevel; опыт за сообщение — общий, как в JuniperBot; scrapPerMessage — скрап на этом ранге.
+const rank = (name: string, emoji: string | null, minLevel: number, scrapReward: number, scrapPerMessage: number, roleId: string) => ({
+  name,
+  emoji,
+  minLevel,
+  minXp: levelTotalExp(minLevel),
+  scrapReward,
+  xpMin: null,
+  xpMax: null,
+  scrapPerMessage,
+  roleId,
+});
 export const DEFAULT_RANKS = [
-  { name: "Фармила", emoji: null, minXp: 50, scrapReward: 5, xpMin: 0.02, xpMax: 0.03, scrapPerMessage: 0.05, roleId: "1333079670098497647" },
-  { name: "Билдер", emoji: "🩲", minXp: 100, scrapReward: 7, xpMin: 0.03, xpMax: 0.04, scrapPerMessage: 0.07, roleId: "1333079839569346661" },
-  { name: "Стрелок", emoji: "🌾", minXp: 300, scrapReward: 10, xpMin: 0.04, xpMax: 0.05, scrapPerMessage: 0.09, roleId: "1333079985124020296" },
-  { name: "Рейдер", emoji: "🪵", minXp: 500, scrapReward: 15, xpMin: 0.05, xpMax: 0.06, scrapPerMessage: 0.12, roleId: "1333080059157938189" },
-  { name: "Комбатер", emoji: "🪨", minXp: 700, scrapReward: 20, xpMin: 0.05, xpMax: 0.06, scrapPerMessage: 0.15, roleId: "1333080086986887258" },
-  { name: "Руфкемпер", emoji: "⚙️", minXp: 1000, scrapReward: 50, xpMin: 0.07, xpMax: 0.08, scrapPerMessage: 0.18, roleId: "1333080151172321362" },
-  { name: "Сигма раста", emoji: "💎", minXp: 1500, scrapReward: 100, xpMin: 0.08, xpMax: 0.09, scrapPerMessage: 0.21, roleId: "1333080205593411676" },
-] as const;
+  rank("Фармила", null, 5, 5, 0.05, "1333079670098497647"),
+  rank("Билдер", "🩲", 10, 7, 0.07, "1333079839569346661"),
+  rank("Стрелок", "🌾", 15, 10, 0.09, "1333079985124020296"),
+  rank("Рейдер", "🪵", 20, 15, 0.12, "1333080059157938189"),
+  rank("Комбатер", "🪨", 25, 20, 0.15, "1333080086986887258"),
+  rank("Руфкемпер", "⚙️", 30, 50, 0.18, "1333080151172321362"),
+  rank("Сигма раста", "💎", 35, 100, 0.21, "1333080205593411676"),
+];
 
 // Создаёт настройки и стартовые ранги, если база пустая.
 export async function ensureRatingDefaults(db: Db): Promise<void> {

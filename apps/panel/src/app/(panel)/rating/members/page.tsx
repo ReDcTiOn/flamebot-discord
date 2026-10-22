@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { formatNumber, prisma, SNOWFLAKE } from "@flamebot/core";
+import { formatNumber, levelFromExp, prisma, SNOWFLAKE } from "@flamebot/core";
 import { EmptyState, PageHead } from "@/components/Fields";
 import { requirePage } from "@/lib/auth";
 import { avatarUrl } from "@/lib/discord";
@@ -75,6 +75,7 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
               <tr>
                 <th>Игрок</th>
                 <th>Ранг</th>
+                <th className="num">Уровень</th>
                 <th className="num">Опыт</th>
                 <th className="num">Скрап</th>
                 <th className="num">Репутация</th>
@@ -100,6 +101,7 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
                     </div>
                   </td>
                   <td>{m.rank ? <span className="chip">{m.rank.emoji} {m.rank.name}</span> : <span className="muted">—</span>}</td>
+                  <td className="num">{levelFromExp(m.xp)}</td>
                   <td className="num">{formatNumber(m.xp)}</td>
                   <td className="num">{formatNumber(m.scrap)}</td>
                   <td className="num">{formatNumber(m.rep)}</td>

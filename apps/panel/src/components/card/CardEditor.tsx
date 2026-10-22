@@ -90,7 +90,7 @@ function newElement(type: CardElementType, layout: CardLayout): CardElement {
     case "avatar":
       return { ...base, type, size: 120, shape: "circle", borderWidth: 4, borderColor: "#ffffff" };
     case "progress":
-      return { ...base, type, width: 400, height: 16, radius: 8, trackColor: "#2a2a2a", fillColor: "#3b82f6" };
+      return { ...base, type, width: 400, height: 16, radius: 8, trackColor: "#2a2a2a", fillColor: "#3b82f6", source: "level" };
     case "badges":
       return { ...base, type, size: 14, font: "inter", color: "#2a2a2a", textColor: "#d0d0d0", gap: 6, maxCount: 3 };
   }

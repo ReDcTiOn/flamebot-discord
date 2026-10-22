@@ -6,6 +6,7 @@ import { applyRank } from "./ranks.js";
 import { expireOldRequests } from "./customRoles.js";
 import { event } from "./events.js";
 import { revokeRole } from "./roles.js";
+import { processVoice } from "./voice.js";
 
 function isUnknownMember(err: unknown): boolean {
   return err instanceof DiscordAPIError && err.code === RESTJSONErrorCodes.UnknownMember;
@@ -43,7 +44,8 @@ export async function expirePurchases(guild: Guild): Promise<void> {
 
 // Пересчитывает роли тех, кому панель поменяла опыт или кому изменили ранги.
 export async function processRoleSyncQueue(guild: Guild): Promise<void> {
-  const queue = await prisma.member.findMany({ where: { needsRoleSync: true }, take: 25 });
+  // Сначала проверка участника подтягивает опыт до роли ранга, которая у человека уже есть, — потом роли.
+  const queue = await prisma.member.findMany({ where: { needsRoleSync: true, needsMemberCheck: false }, take: 25 });
   if (queue.length === 0) return;
   const { settings, ranks } = await getState();
 
@@ -130,6 +132,7 @@ export function startJobs(guild: Guild, every: (fn: () => Promise<void>, ms: num
   every(() => expirePurchases(guild), 5 * 60_000);
   every(() => processRoleSyncQueue(guild), 30_000);
   every(() => processMemberChecks(guild), 30_000);
+  every(() => processVoice(guild), 60_000);
   every(() => expireOldRequests(guild), 30 * 60_000);
   every(cleanupEvents, 24 * 3_600_000);
 }

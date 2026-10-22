@@ -93,8 +93,8 @@ async function setupGuild(c: Client, guild: Guild) {
 
 function createClient(): Client {
   const c = new Client({
-    // Только то, что нужно: сервер, сообщения и их текст (для минимальной длины).
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
+    // Только то, что нужно: сервер, сообщения и их текст (для минимальной длины), голосовые каналы (опыт за голос).
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildVoiceStates],
     partials: [Partials.GuildMember],
     // По умолчанию бот никого не пингует. Где нужно упоминание, оно разрешается явно.
     allowedMentions: { parse: [], repliedUser: false },

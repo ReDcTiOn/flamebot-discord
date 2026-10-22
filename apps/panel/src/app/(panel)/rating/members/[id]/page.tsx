@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { formatNumber, prisma, rankProgress, SNOWFLAKE } from "@flamebot/core";
+import { formatNumber, levelProgress, prisma, rankProgress, SNOWFLAKE } from "@flamebot/core";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { EventTable, eventGroup, type TimelineRow } from "@/components/EventTable";
 import { DangerZone, EmptyState, Section, Tabs, pickTab } from "@/components/Fields";
@@ -62,7 +62,8 @@ export default async function MemberPage({ params, searchParams }: { params: Pro
   if (!m) notFound();
 
   const place = (await prisma.member.count({ where: { inGuild: true, xp: { gt: m.xp } } })) + 1;
-  const { next, ratio } = rankProgress(ranks, m.xp);
+  const { next } = rankProgress(ranks, m.xp);
+  const lv = levelProgress(m.xp);
   const active = m.purchases.filter((p) => p.active);
   const pending = m.purchases.filter((p) => p.request?.status === "PENDING");
   const base = `/rating/members/${id}`;
@@ -177,12 +178,14 @@ export default async function MemberPage({ params, searchParams }: { params: Pro
 
       <div className="grid grid-4" style={{ marginBottom: 10 }}>
         <div className="metric">
-          <div className="metric-label">Опыт</div>
+          <div className="metric-label">Уровень {lv.level} · опыт</div>
           <div className="metric-value">{formatNumber(m.xp)}</div>
-          <div className="mini-progress" title={`${Math.round(ratio * 100)}%`}>
-            <div style={{ width: `${Math.round(ratio * 100)}%` }} />
+          <div className="mini-progress" title={`Уровень: ${Math.round(lv.ratio * 100)}%`}>
+            <div style={{ width: `${Math.round(lv.ratio * 100)}%` }} />
           </div>
-          <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>{next ? `до «${next.name}»: ${formatNumber(next.minXp - m.xp)}` : "максимальный ранг"}</div>
+          <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+            {formatNumber(Math.floor(lv.into))} / {formatNumber(lv.need)} до {lv.level + 1} ур. · {next ? `до «${next.name}»: ${formatNumber(Math.max(0, next.minXp - m.xp))}` : "максимальный ранг"}
+          </div>
         </div>
         <div className="metric"><div className="metric-label">Скрап</div><div className="metric-value">{formatNumber(m.scrap)}</div></div>
         <div className="metric"><div className="metric-label">Репутация</div><div className="metric-value">{formatNumber(m.rep)}</div><div className="muted" style={{ fontSize: 12, marginTop: 4 }}>сам дал {formatNumber(m._count.repGiven)}</div></div>
@@ -190,6 +193,7 @@ export default async function MemberPage({ params, searchParams }: { params: Pro
       </div>
       <div className="facts">
         <span>Сообщений засчитано: <b>{formatNumber(m.messageCount)}</b></span>
+        <span>В голосе: <b>{formatNumber(Math.round(m.voiceSeconds / 360) / 10)} ч</b>{m.voiceXp > 0 ? `, ${formatNumber(m.voiceXp)} опыта` : ""}</span>
         <span>Последний опыт: <b>{date(m.lastXpAt)}</b></span>
         <span>В рейтинге с: <b>{m.createdAt.toLocaleDateString("ru-RU")}</b></span>
         <span>Покупок: <b>{m.purchases.length}</b></span>

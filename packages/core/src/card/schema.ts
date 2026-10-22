@@ -51,6 +51,8 @@ export const progressElement = z.object({
   radius: z.number().int().min(0).max(100),
   trackColor: color,
   fillColor: color,
+  // Что показывает полоса: путь до следующего ранга или до следующего уровня.
+  source: z.enum(["rank", "level"]).default("rank"),
 });
 
 export const rectElement = z.object({

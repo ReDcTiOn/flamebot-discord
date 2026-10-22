@@ -1,5 +1,5 @@
 import { Plus, Trash2 } from "lucide-react";
-import { formatNumber, getRatingSettings, messageReward, prisma, type Rank } from "@flamebot/core";
+import { formatNumber, getRatingSettings, levelTotalExp, messageReward, prisma, type Rank } from "@flamebot/core";
 import { ActionForm, IconSubmit, SubmitButton } from "@/components/ActionForm";
 import { EmojiPicker } from "@/components/EmojiPicker";
 import { ExpandableRow } from "@/components/ui/ExpandableRow";
@@ -33,8 +33,8 @@ function RankFields({ roles, rank, defaults }: { roles: Roles; rank?: Rank; defa
       </div>
       <div className="grid grid-2">
         <label className="stack">
-          <span>Порог опыта</span>
-          <input type="number" name="minXp" defaultValue={rank?.minXp} placeholder="25000" min={0} required className="wide" />
+          <span>С какого уровня</span>
+          <input type="number" name="minLevel" defaultValue={rank?.minLevel} placeholder="10" min={1} max={999} required className="wide" />
         </label>
         <label className="stack">
           <span>Награда скрапом за ранг</span>
@@ -58,6 +58,9 @@ function RankFields({ roles, rank, defaults }: { roles: Roles; rank?: Rank; defa
           </label>
         </div>
       </fieldset>
+      <p className="muted" style={{ fontSize: 12.5, margin: 0 }}>
+        Опыт уровня — как в JuniperBot: 5 ур. — {formatNumber(levelTotalExp(5))}, 10 — {formatNumber(levelTotalExp(10))}, 20 — {formatNumber(levelTotalExp(20))}, 30 — {formatNumber(levelTotalExp(30))}.
+      </p>
       <label className="stack">
         <span>Роль Discord, которую выдаёт бот</span>
         <RoleSelect name="roleId" roles={roles} defaultValue={rank?.roleId ?? null} />
@@ -94,14 +97,14 @@ export default async function XpPage({ searchParams }: { searchParams: Promise<{
 
   return (
     <>
-      <PageHead title="Опыт и ранги" hint="Игроки получают опыт за сообщения в чате и растут по рангам." />
+      <PageHead title="Опыт и ранги" hint="Как в JuniperBot: опыт за сообщения и голос, уровни по той же формуле, ранги выдаются с нужного уровня." />
       <Tabs tabs={[...TABS]} active={tab} base="/rating/xp" />
 
       {tab === "xp" && (
         <ActionForm action={saveXpSettings}>
           <Section title="Сообщения" hint="Сколько опыта и скрапа приносит одно сообщение">
             <div className="tiles group">
-              <FieldRow icon="trending" label="Опыт за сообщение" hint="Случайное значение от и до, можно с сотыми: 0.01. Для ранга можно задать своё">
+              <FieldRow icon="trending" label="Опыт за сообщение" hint="Случайное значение от и до. В JuniperBot 15–24 раз в минуту. Целые границы — целый опыт">
                 <NumberInput name="xpMin" defaultValue={s.xpMin} min={0} max={1000} step={0.01} label="Минимум опыта" />
                 <span className="muted">–</span>
                 <NumberInput name="xpMax" defaultValue={s.xpMax} min={0} max={1000} step={0.01} label="Максимум опыта" />
@@ -115,8 +118,16 @@ export default async function XpPage({ searchParams }: { searchParams: Promise<{
               <FieldRow icon="coin" label="Скрап за начисление опыта" hint="Начисляется вместе с опытом, можно с сотыми. Для ранга можно задать своё">
                 <NumberInput name="scrapPerAward" defaultValue={s.scrapPerAward} min={0} max={1000} step={0.01} label="Скрап" />
               </FieldRow>
-              <FieldRow icon="mic" label="Опыт за голосовые каналы" hint="Появится в следующих версиях">
-                <Switch name="voiceXpEnabled" defaultChecked={false} disabled label="Опыт за голосовые каналы" />
+            </div>
+          </Section>
+
+          <Section title="Голосовые каналы" hint="Как в JuniperBot: опыт идёт, пока у человека включён микрофон и в канале есть ещё хотя бы один с включённым микрофоном. AFK-канал и боты не считаются.">
+            <div className="tiles group">
+              <FieldRow icon="mic" label="Опыт за голос">
+                <Switch name="voiceXpEnabled" defaultChecked={s.voiceXpEnabled} label="Опыт за голос" />
+              </FieldRow>
+              <FieldRow icon="users" label="Опыт в минуту за каждого с микрофоном" hint={`Считая себя: вдвоём по ${s.voiceXpPerMember * 2}, втроём по ${s.voiceXpPerMember * 3} в минуту. В JuniperBot — 6`}>
+                <NumberInput name="voiceXpPerMember" defaultValue={s.voiceXpPerMember} min={0} max={1000} label="Опыт в минуту за каждого" />
               </FieldRow>
             </div>
           </Section>
@@ -170,7 +181,7 @@ export default async function XpPage({ searchParams }: { searchParams: Promise<{
             }
           >
             {ranks.length === 0 ? (
-              <EmptyState icon="trending" title="Рангов пока нет" hint="Добавь первый ранг с порогом 0 опыта." />
+              <EmptyState icon="trending" title="Рангов пока нет" hint="Добавь первый ранг и укажи, с какого уровня он выдаётся." />
             ) : (
               <div className="tiles">
                 {ranks.map((r, i) => (
@@ -184,7 +195,7 @@ export default async function XpPage({ searchParams }: { searchParams: Promise<{
                     title={r.name}
                     hint={
                       <>
-                        от {r.minXp.toLocaleString("ru-RU")} опыта
+                        с {r.minLevel} уровня ({r.minXp.toLocaleString("ru-RU")} опыта)
                         {r.roleId ? ` · роль @${roleName.get(r.roleId) ?? "удалена"}` : " · без роли"}
                         {r.scrapReward > 0 ? ` · награда ${r.scrapReward.toLocaleString("ru-RU")} скрапа` : ""}
                         {(() => {

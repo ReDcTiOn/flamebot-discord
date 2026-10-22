@@ -1,32 +1,27 @@
 // Переносит опыт из рейтинга JuniperBot (файл из скрипта выгрузки, см. README).
 //   pnpm -F rating-bot import-juniper <файл.json>            — только предпросмотр, ничего не меняет
 //   pnpm -F rating-bot import-juniper <файл.json> --apply    — записать
-//   --factor 1.5  — сколько наших сообщений считать за одно начисление JuniperBot (по умолчанию 1)
 //
-// Опыт пересчитывается «как если бы человек писал у нас»: опыт JuniperBot делится на 19,5
-// (он даёт 15–24 за сообщение и не чаще раза в минуту) — это число засчитанных сообщений;
-// затем эти сообщения проходят через наши ранги со средним начислением каждого ранга.
-// Опыт за голос у JuniperBot на этом сервере не начислялся, поэтому весь его опыт — за сообщения;
-// время в голосе переносится отдельно в voiceSeconds.
+// Рейтинг у нас устроен как в JuniperBot (те же уровни и начисление), поэтому опыт переносится один в один.
+// Число засчитанных сообщений оценивается как опыт / 19,5 (JuniperBot даёт 15–24 за сообщение).
+// Время в голосе переносится в voiceSeconds.
 //
-// Повторный запуск безопасен: опыт ставится, только если пересчитанный больше текущего.
+// Повторный запуск безопасен: опыт ставится, только если он больше текущего.
 // Роли в Discord не трогаются: они у игроков уже есть. Ранг записывается в базу сразу,
 // награды за него считаются выданными, скрап за сообщения не начисляется.
 // Потом бот проверяет каждого из файла: ушедших отмечает, остальным обновляет имя и подтягивает
 // опыт до порога самой высокой роли ранга, которая у человека уже есть, — все остаются при своих ролях.
 import { existsSync, readFileSync } from "node:fs";
-import { getRatingSettings, prisma, rankForXp, simulateMessages } from "@flamebot/core";
+import { levelFromExp, prisma, rankForXp } from "@flamebot/core";
 
 const JUNIPER_EXP_PER_MESSAGE = 19.5;
 
 const args = process.argv.slice(2);
 const apply = args.includes("--apply");
-const factorIdx = args.indexOf("--factor");
-const factor = factorIdx >= 0 ? Number(args[factorIdx + 1]) : 1;
-const file = args.find((a, i) => !a.startsWith("--") && !(factorIdx >= 0 && i === factorIdx + 1));
+const file = args.find((a) => !a.startsWith("--"));
 
-if (!file || !existsSync(file) || !Number.isFinite(factor) || factor <= 0 || factor > 100) {
-  console.error("Использование: pnpm -F rating-bot import-juniper /путь/к/juniper-ranking-<сервер>.json [--factor 1] [--apply]");
+if (!file || !existsSync(file)) {
+  console.error("Использование: pnpm -F rating-bot import-juniper /путь/к/juniper-ranking-<сервер>.json [--apply]");
   process.exit(1);
 }
 
@@ -55,8 +50,7 @@ for (const m of raw.members) {
   }
 }
 
-const [settings, ranks, existing] = await Promise.all([
-  getRatingSettings(prisma),
+const [ranks, existing] = await Promise.all([
   prisma.rank.findMany({ orderBy: { minXp: "asc" } }),
   prisma.member.findMany({
     where: { id: { in: [...byId.keys()] } },
@@ -70,7 +64,7 @@ interface Plan {
   name: string;
   juniperExp: number;
   messages: number;
-  xp: number; // пересчитанный
+  xp: number; // опыт JuniperBot
   before: number | null; // текущий у нас, null — участника ещё нет
   after: number;
   voiceSeconds: number;
@@ -79,8 +73,8 @@ interface Plan {
 
 const plans: Plan[] = [];
 for (const m of byId.values()) {
-  const messages = Math.round((m.totalExp / JUNIPER_EXP_PER_MESSAGE) * factor);
-  const xp = simulateMessages(messages, settings, ranks).xp;
+  const messages = Math.round(m.totalExp / JUNIPER_EXP_PER_MESSAGE);
+  const xp = m.totalExp;
   const voiceSeconds = Math.round(m.voiceActivity / 1000);
   const have = current.get(m.id);
   const after = Math.max(have?.xp ?? 0, xp);
@@ -95,7 +89,7 @@ const rankName = (xp: number) => rankForXp(ranks, xp)?.name ?? "без ранг�
 const fmt = (n: number) => n.toLocaleString("ru-RU", { maximumFractionDigits: 2 });
 
 console.log(`Файл: сервер ${raw.guildId ?? "?"}, выгружен ${raw.exportedAt ?? "?"}. Записей ${raw.members.length}, разных участников ${byId.size}.`);
-console.log(`Пересчёт: опыт JuniperBot / ${JUNIPER_EXP_PER_MESSAGE} × ${factor} = сообщений; сообщения проходят через наши ранги (${ranks.length}) со средней ставкой.`);
+console.log(`Опыт переносится как есть: уровни и начисление у нас те же, что в JuniperBot. Рангов: ${ranks.length}.`);
 console.log(`Уже есть у нас: ${existing.length}, новых: ${plans.filter((p) => p.before === null).length}, изменится: ${plans.filter((p) => p.changes).length}.`);
 
 const dist = new Map<string, { before: number; after: number }>();
@@ -116,9 +110,9 @@ console.table(
   plans.slice(0, 15).map((p) => ({
     участник: p.name,
     "опыт Juniper": p.juniperExp,
-    сообщений: p.messages,
     "сейчас у нас": p.before === null ? "—" : fmt(p.before),
     станет: fmt(p.after),
+    уровень: levelFromExp(p.after),
     ранг: rankName(p.after),
     "в голосе, ч": Math.round(p.voiceSeconds / 360) / 10,
   })),
@@ -183,7 +177,7 @@ await prisma.auditLog.create({
     actorName: "Импорт из JuniperBot",
     action: "member.import",
     target: `${todo.length} участников`,
-    details: { file: raw.exportedAt ?? null, guildId: raw.guildId ?? null, factor, created, updated, unchanged: plans.length - todo.length },
+    details: { file: raw.exportedAt ?? null, guildId: raw.guildId ?? null, created, updated, unchanged: plans.length - todo.length },
   },
 });
 console.log(`\nГотово: создано ${created}, обновлено ${updated}, без изменений ${plans.length - todo.length}. Роли не менялись.`);

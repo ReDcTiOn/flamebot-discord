@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { round2 } from "../src/db.js";
-import { messageReward, randomHundredths, simulateMessages } from "../src/rewards.js";
+import { messageReward, randomAward, randomHundredths } from "../src/rewards.js";
 import { rankSchema, xpSettingsSchema } from "../src/settings.js";
 import { formatNumber } from "../src/util.js";
 
@@ -43,13 +43,13 @@ describe("начисление за сообщение", () => {
 });
 
 describe("проверка настроек", () => {
-  const base = { xpCooldownSec: 60, minMessageLength: 5, announceRankUp: true, removeOldRankRoles: true };
+  const base = { xpCooldownSec: 60, minMessageLength: 5, voiceXpEnabled: true, voiceXpPerMember: 6, announceRankUp: true, removeOldRankRoles: true };
   it("общие настройки принимают сотые и не принимают тысячные", () => {
     assert.equal(xpSettingsSchema.safeParse({ ...base, xpMin: 0.01, xpMax: 0.02, scrapPerAward: 0.01 }).success, true);
     assert.equal(xpSettingsSchema.safeParse({ ...base, xpMin: 0.001, xpMax: 0.02, scrapPerAward: 0 }).success, false);
   });
 
-  const rank = { name: "Камень", emoji: null, minXp: 4000, roleId: null, scrapReward: 150 };
+  const rank = { name: "Камень", emoji: null, minLevel: 20, roleId: null, scrapReward: 150 };
   it("у ранга опыт «от» и «до» задаются вместе", () => {
     assert.equal(rankSchema.safeParse({ ...rank, ...plain }).success, true);
     assert.equal(rankSchema.safeParse({ ...rank, xpMin: 0.5, xpMax: 1.25, scrapPerMessage: 0.1 }).success, true);
@@ -58,29 +58,16 @@ describe("проверка настроек", () => {
   });
 });
 
-describe("перенос сообщений в опыт", () => {
-  const settings = { xpMin: 0.01, xpMax: 0.02, scrapPerAward: 0 };
-  const ranks = [
-    { minXp: 50, xpMin: 0.02, xpMax: 0.03, scrapPerMessage: 0.05, scrapReward: 5 },
-    { minXp: 100, xpMin: 0.03, xpMax: 0.04, scrapPerMessage: 0.07, scrapReward: 7 },
-  ];
-
-  it("до первого ранга — по общей ставке", () => {
-    assert.deepEqual(simulateMessages(1000, settings, ranks), { xp: 15, scrap: 0, rankRewards: 0 });
-    assert.deepEqual(simulateMessages(0, settings, ranks), { xp: 0, scrap: 0, rankRewards: 0 });
+describe("начисление как в JuniperBot", () => {
+  it("целые границы — целый опыт в диапазоне", () => {
+    const seen = new Set<number>();
+    for (let i = 0; i < 2000; i++) seen.add(randomAward(15, 24));
+    assert.deepEqual([...seen].sort((a, b) => a - b), [15, 16, 17, 18, 19, 20, 21, 22, 23, 24]);
   });
-
-  it("после ранга ставка растёт", () => {
-    // 3334 сообщения по 0,015 → 50,01; дальше 666 сообщений по 0,025 → 66,66.
-    const r = simulateMessages(4000, settings, ranks);
-    assert.equal(r.xp, 66.66);
-    assert.equal(r.rankRewards, 5);
-    // 2000 сообщений по 0,025 после первого ранга довели бы до второго.
-    assert.equal(simulateMessages(3334 + 2000, settings, ranks).rankRewards, 12);
-  });
-
-  it("без рангов и с нулевой ставкой не зацикливается", () => {
-    assert.equal(simulateMessages(10, settings, []).xp, 0.15);
-    assert.equal(simulateMessages(10, { xpMin: 0, xpMax: 0, scrapPerAward: 0 }, ranks).xp, 0);
+  it("дробные границы — с сотыми", () => {
+    for (let i = 0; i < 200; i++) {
+      const v = randomAward(0.01, 0.02);
+      assert.ok(v === 0.01 || v === 0.02);
+    }
   });
 });

@@ -9,7 +9,7 @@ import {
   type ButtonInteraction,
   type ChatInputCommandInteraction,
 } from "discord.js";
-import { formatNumber, prisma, type Rank } from "@flamebot/core";
+import { formatNumber, levelFromExp, prisma, type Rank } from "@flamebot/core";
 import { getState } from "../state.js";
 import { SCRAP, UI, V2, avatarUrl, button, buttonRow, divider, text } from "../ui.js";
 import type { Command } from "./types.js";
@@ -54,7 +54,8 @@ export async function buildTop(category: Category, viewerId: string, guildName: 
   // Первые три места — крупно и с аватаром.
   rows.slice(0, 3).forEach((r, i) => {
     const value = `**${formatNumber(r[c.field])}** ${c.unit}`;
-    const extra = category === "xp" ? rankLabel(r.rank ?? ranks[0]) : `${rankLabel(r.rank)} · ${formatNumber(r.xp)} опыта`;
+    const level = `${levelFromExp(r.xp)} ур.`;
+    const extra = category === "xp" ? `${level} · ${rankLabel(r.rank ?? ranks[0])}` : `${level} · ${rankLabel(r.rank)} · ${formatNumber(r.xp)} опыта`;
     container.addSectionComponents(
       new SectionBuilder()
         .addTextDisplayComponents(text(`### ${MEDALS[i]} ${escapeMarkdown(r.displayName)}\n${c.emoji} ${value}\n-# ${extra}`))
@@ -66,7 +67,7 @@ export async function buildTop(category: Category, viewerId: string, guildName: 
   if (rows.length > 3) {
     const lines = rows.slice(3).map((r, i) => {
       const place = String(i + 4).padStart(2, " ");
-      return `\`${place}\`  **${escapeMarkdown(r.displayName)}** — ${formatNumber(r[c.field])} ${c.emoji} · ${rankLabel(r.rank)}`;
+      return `\`${place}\`  **${escapeMarkdown(r.displayName)}** — ${formatNumber(r[c.field])} ${c.emoji} · ${levelFromExp(r.xp)} ур. · ${rankLabel(r.rank)}`;
     });
     container.addSeparatorComponents(divider()).addTextDisplayComponents(text(lines.join("\n")));
   }

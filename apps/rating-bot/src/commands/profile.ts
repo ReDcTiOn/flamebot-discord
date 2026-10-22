@@ -1,5 +1,5 @@
 import { AttachmentBuilder, EmbedBuilder, Locale, MessageFlags, SlashCommandBuilder, escapeMarkdown } from "discord.js";
-import { formatNumber, prisma, rankProgress } from "@flamebot/core";
+import { formatNumber, levelProgress, prisma, rankProgress } from "@flamebot/core";
 import { stripEmoji } from "@flamebot/core/card";
 import { log } from "../logger.js";
 import { getState } from "../state.js";
@@ -65,9 +65,11 @@ export const profileCommand: Command = {
     }
 
     const rankLabel = current ? `${current.emoji ?? ""} ${escapeMarkdown(current.name)}`.trim() : "Без ранга";
-    const progressLine = next
-      ? `${progressBar(ratio)}  ${formatNumber(row.xp)} / ${formatNumber(next.minXp)}\nДо ранга «${escapeMarkdown(next.name)}»`
-      : `${progressBar(1)}  ${formatNumber(row.xp)}\nМаксимальный ранг`;
+    // Как в JuniperBot: прогресс текущего уровня, ниже — сколько до следующего ранга.
+    const lv = levelProgress(row.xp);
+    const progressLine =
+      `**Уровень ${lv.level}** · ${progressBar(lv.ratio)}  ${formatNumber(Math.floor(lv.into))} / ${formatNumber(lv.need)}\n` +
+      (next ? `До ранга «${escapeMarkdown(next.name)}» (${next.minLevel} ур.): ${formatNumber(Math.max(0, next.minXp - row.xp))} опыта` : "Максимальный ранг");
 
     const embed = new EmbedBuilder()
       .setColor(COLORS.brand)
@@ -77,6 +79,8 @@ export const profileCommand: Command = {
         { name: "Скрап", value: formatNumber(row.scrap), inline: true },
         { name: "Репутация", value: formatNumber(row.rep), inline: true },
         { name: "Сообщений засчитано", value: formatNumber(row.messageCount), inline: true },
+        { name: "Опыт", value: formatNumber(row.xp), inline: true },
+        { name: "В голосе", value: `${formatNumber(Math.round(row.voiceSeconds / 360) / 10)} ч`, inline: true },
       );
     if (badges.length > 0) {
       embed.addFields({ name: "Бейджи", value: badges.map((b) => `\`${escapeMarkdown(b.label)}\``).join(" ").slice(0, 1024) });

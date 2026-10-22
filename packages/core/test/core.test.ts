@@ -67,7 +67,7 @@ describe("шаблоны и настройки", () => {
   });
 
   it("не принимает минимум опыта больше максимума", () => {
-    const base = { xpMin: 30, xpMax: 10, xpCooldownSec: 60, minMessageLength: 5, scrapPerAward: 2, announceRankUp: true, removeOldRankRoles: true };
+    const base = { xpMin: 30, xpMax: 10, xpCooldownSec: 60, minMessageLength: 5, scrapPerAward: 2, voiceXpEnabled: true, voiceXpPerMember: 6, announceRankUp: true, removeOldRankRoles: true };
     assert.equal(xpSettingsSchema.safeParse(base).success, false);
     assert.equal(xpSettingsSchema.safeParse({ ...base, xpMax: 40 }).success, true);
     assert.equal(xpSettingsSchema.safeParse({ ...base, xpMax: 40, xpCooldownSec: 1 }).success, false);

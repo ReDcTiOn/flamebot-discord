@@ -1,4 +1,5 @@
 import { cardFontString } from "./fonts.js";
+import { levelProgress } from "../levels.js";
 import type { CardElement, CardLayout } from "./schema.js";
 
 // Минимальный набор Canvas 2D API. Ему соответствуют и CanvasRenderingContext2D в браузере,
@@ -69,7 +70,11 @@ export const CARD_PLACEHOLDERS: { key: string; label: string }[] = [
   { key: "{next_xp}", label: "порог следующего ранга" },
   { key: "{xp_left}", label: "сколько осталось" },
   { key: "{next_info}", label: "«до ранга: N» или «максимальный ранг»" },
-  { key: "{progress}", label: "прогресс в %" },
+  { key: "{progress}", label: "прогресс до ранга в %" },
+  { key: "{level}", label: "уровень" },
+  { key: "{level_xp}", label: "опыт на текущем уровне" },
+  { key: "{level_need}", label: "опыт на весь уровень" },
+  { key: "{level_progress}", label: "прогресс уровня в %" },
   { key: "{scrap}", label: "скрап" },
   { key: "{rep}", label: "репутация" },
   { key: "{messages}", label: "сообщений засчитано" },
@@ -85,6 +90,7 @@ export function stripEmoji(text: string): string {
 }
 
 export function fillPlaceholders(template: string, d: CardData): string {
+  const lv = levelProgress(d.xp);
   const values: Record<string, string> = {
     name: d.name,
     username: d.username,
@@ -95,6 +101,10 @@ export function fillPlaceholders(template: string, d: CardData): string {
     xp_left: d.nextXp === null ? "—" : nf.format(Math.max(0, d.nextXp - d.xp)),
     next_info: d.nextXp === null ? "максимальный ранг" : `до «${d.nextRank}»: ${nf.format(Math.max(0, d.nextXp - d.xp))}`,
     progress: `${Math.round(d.progress * 100)}%`,
+    level: nf.format(lv.level),
+    level_xp: nf.format(Math.floor(lv.into)),
+    level_need: nf.format(lv.need),
+    level_progress: `${Math.round(lv.ratio * 100)}%`,
     scrap: nf.format(d.scrap),
     rep: nf.format(d.rep),
     messages: nf.format(d.messages),
@@ -166,7 +176,8 @@ function drawElement(ctx: Ctx2D, el: CardElement, data: CardData, images: CardIm
       roundedPath(ctx, el.x, el.y, el.width, el.height, el.radius);
       ctx.fillStyle = el.trackColor;
       ctx.fill();
-      const w = Math.round(el.width * Math.min(1, Math.max(0, data.progress)));
+      const ratio = el.source === "level" ? levelProgress(data.xp).ratio : data.progress;
+      const w = Math.round(el.width * Math.min(1, Math.max(0, ratio)));
       if (w > 0) {
         ctx.save();
         roundedPath(ctx, el.x, el.y, el.width, el.height, el.radius);

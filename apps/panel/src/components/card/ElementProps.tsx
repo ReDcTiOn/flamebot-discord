@@ -144,6 +144,15 @@ export function ElementProps({
             <NumField label="Высота" value={el.height} min={1} max={200} onChange={(v) => patch({ height: v })} />
           </Row>
           <NumField label="Скругление" value={el.radius} min={0} max={100} onChange={(v) => patch({ radius: v })} />
+          <SelectField
+            label="Показывает"
+            value={el.source}
+            options={[
+              { value: "level", label: "прогресс уровня" },
+              { value: "rank", label: "путь до следующего ранга" },
+            ]}
+            onChange={(v) => patch({ source: v as "rank" | "level" })}
+          />
           <ColorField label="Цвет дорожки" value={el.trackColor} onChange={(v) => patch({ trackColor: v })} />
           <ColorField label="Цвет заполнения" value={el.fillColor} onChange={(v) => patch({ fillColor: v })} />
         </>

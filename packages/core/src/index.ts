@@ -3,6 +3,7 @@ export * from "./types.js";
 export * from "./rewards.js";
 export * from "./settings.js";
 export * from "./ranks.js";
+export * from "./levels.js";
 export * from "./permissions.js";
 export * from "./util.js";
 export * from "./credentials.js";
