@@ -43,6 +43,26 @@ services:
     restart: "no"
     networks: [internal]
 
+  link-bot:
+    <<: *hardening
+    build:
+      context: .
+      target: link-bot
+    environment:
+      # Токен задаётся в панели («Привязка Steam» → «Подключение»).
+      GUILD_ID: ${GUILD_ID:?Задай GUILD_ID в .env}
+      DATABASE_URL: postgresql://flamebot:${POSTGRES_PASSWORD}@db:5432/flamebot
+    volumes:
+      - link-bot-data:/data
+    # HTTP API для плагина на игровых серверах. Слушает только localhost, наружу — через Caddy
+    # по адресу <PANEL_URL>/link-api (docs/DEPLOY.md). У тестовой копии свой порт: LINK_API_PORT=3011.
+    ports:
+      - "127.0.0.1:${LINK_API_PORT:-3010}:3010"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks: [internal, egress]
+
   rating-bot:
     <<: *hardening
     build:
@@ -164,6 +184,7 @@ networks:
 volumes:
   pgdata:
   # Ключи шифрования токенов, по тому на бота. Потеряешь том — токены придётся ввести в панели заново.
+  link-bot-data:
   rating-bot-data:
   online-bot-data:
   giveaway-bot-data:

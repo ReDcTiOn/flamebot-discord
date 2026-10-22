@@ -6,8 +6,10 @@ import {
   Hash,
   House,
   Image as ImageIcon,
+  KeyRound,
   Layers,
   LayoutDashboard,
+  Link2,
   List,
   Map as MapIcon,
   Megaphone,
@@ -61,6 +63,8 @@ const ICONS: Record<Exclude<IconName, "scrap">, LucideIcon> = {
   plus: Plus,
   map: MapIcon,
   plug: Plug,
+  link: Link2,
+  key: KeyRound,
 };
 
 export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {

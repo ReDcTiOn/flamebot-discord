@@ -92,6 +92,10 @@ sudo journalctl -u caddy -f           # ждём «certificate obtained successf
 
 Открой `https://bots.flamerust.gg` — должна появиться страница входа.
 
+Если Caddyfile уже был настроен раньше, перенеси из образца блок `(linkapi)` и строки `import linkapi …` / `handle { … }`:
+по адресу `https://bots.flamerust.gg/link-api` плагин FDiscordLink с игровых серверов ходит к боту привязки Steam.
+Проверка: `curl https://bots.flamerust.gg/link-api/health` должен ответить `{"ok":true}`.
+
 В Caddyfile уже настроено, что панель видит настоящий IP игрока из заголовка Cloudflare
 (по нему работают ограничения на вход и журнал), а подделать этот заголовок в обход Cloudflare нельзя.
 
@@ -133,7 +137,7 @@ sudo journalctl -u caddy -f           # ждём «certificate obtained successf
 На ПК (Git Bash, в папке проекта):
 
 ```bash
-docker compose stop rating-bot online-bot giveaway-bot maps-bot notice-bot panel
+docker compose stop link-bot rating-bot online-bot giveaway-bot maps-bot notice-bot panel
 docker compose exec -T db pg_dump -U flamebot -d flamebot --clean --if-exists --no-owner | gzip > flamebot.sql.gz
 scp flamebot.sql.gz root@IP_СЕРВЕРА:/tmp/
 ```
@@ -257,7 +261,7 @@ Required reviewers → добавь себя. Тогда в Actions у депл�
 ```bash
 cd /opt/flamebot/prod
 docker compose ps                       # что запущено
-docker compose logs -f --tail=100 rating-bot   # логи бота (online-bot, giveaway-bot, maps-bot, notice-bot, panel — аналогично)
+docker compose logs -f --tail=100 rating-bot   # логи бота (link-bot, online-bot, giveaway-bot, maps-bot, notice-bot, panel — аналогично)
 ./deploy/backup.sh                      # резервная копия прямо сейчас
 ```
 
@@ -273,7 +277,7 @@ docker compose logs -f --tail=100 rating-bot   # логи бота (online-bot, 
 ## Безопасность сервера
 
 - `.env` — только у `flamebot` (`chmod 600`), в git он не попадает.
-- Порт 3000/3001 наружу не открывай: панель доступна только через Caddy с HTTPS.
+- Порты 3000/3001 и 3010/3011 наружу не открывай: панель и API привязки Steam доступны только через Caddy с HTTPS.
 - Когда вход по SSH-ключу проверен, отключи вход по паролю: в `/etc/ssh/sshd_config` поставь
   `PasswordAuthentication no` и выполни `sudo systemctl reload ssh`. Сначала убедись, что ключ работает,
   иначе закроешь себе доступ.

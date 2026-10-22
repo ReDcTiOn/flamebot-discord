@@ -767,6 +767,83 @@ model NoticeAction {
   @@index([status, id])
 }
 
+// ===================== Привязка Steam (модуль "link") =====================
+// Игрок пишет /connect на игровом сервере, плагин Carbon получает у бота код по HTTP, игрок
+// вводит код в Discord, и аккаунты связываются: один Discord — один Steam на все серверы.
+
+// Единственная строка с id = 1.
+model LinkSettings {
+  id             Int      @id @default(1)
+  // Канал с сообщением и кнопкой «Привязать». Сообщение бот отправляет и обновляет сам.
+  channelId      String?
+  // Роль, которую получает каждый, кто привязал аккаунт.
+  roleId         String?
+  // Сколько минут действует код из игры.
+  codeTtlMinutes Int      @default(10)
+  panelTitle     String   @default("Привязка аккаунта Steam")
+  panelText      String   @default("Свяжи свой Steam с Discord, чтобы получить роль игрока.\n\n**1.** Зайди на любой наш сервер RUST и напиши в чат **/connect**.\n**2.** Нажми кнопку «Привязать» ниже и введи код из игры.\n\nОдин Discord можно привязать только к одному аккаунту Steam.")
+  buttonLabel    String   @default("Привязать")
+  // Где сейчас лежит сообщение с кнопкой. Пишет бот.
+  messageChannelId String?
+  messageId        String?
+  updatedAt      DateTime @updatedAt
+}
+
+// Связка аккаунтов. Уникальны и Discord, и Steam.
+model SteamLink {
+  discordId   String      @id
+  steamId     String      @unique
+  steamName   String
+  discordName String
+  // Сервер, на котором игрок получил код.
+  serverId    Int?
+  server      LinkServer? @relation(fields: [serverId], references: [id], onDelete: SetNull)
+  linkedAt    DateTime    @default(now())
+  // Есть ли человек на сервере Discord. Бот проверяет привязки по очереди и заодно выдаёт роль.
+  inGuild     Boolean     @default(true)
+  checkedAt   DateTime?
+
+  @@index([linkedAt(sort: Desc)])
+  @@index([checkedAt])
+}
+
+// Код из игры. На один Steam один код: пока он действует, /connect отдаёт его же.
+model LinkCode {
+  code      String   @id
+  steamId   String   @unique
+  steamName String
+  serverId  Int?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+}
+
+// Игровой сервер с плагином. Ключ API показывается в панели один раз, в базе только его SHA-256:
+// с украденной базой нельзя выдать себя за сервер и привязать чужой Steam.
+model LinkServer {
+  id         Int         @id @default(autoincrement())
+  name       String
+  keyHash    String      @unique
+  // Начало ключа, чтобы отличать ключи в списке.
+  keyHint    String
+  enabled    Boolean     @default(true)
+  createdAt  DateTime    @default(now())
+  lastSeenAt DateTime?
+  links      SteamLink[]
+}
+
+// Задания из панели для бота: снять роль после отвязки.
+model LinkAction {
+  id        Int       @id @default(autoincrement())
+  kind      String
+  discordId String
+  createdAt DateTime  @default(now())
+  doneAt    DateTime?
+
+  @@index([doneAt])
+}
+
 // ===================== Платформа: общие данные сервера =====================
 
 // Открытые ключи ботов для шифрования секретов. Приватные ключи есть только у ботов.

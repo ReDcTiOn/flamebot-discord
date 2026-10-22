@@ -20,13 +20,29 @@
 	}
 }
 
+# API бота привязки Steam: к нему ходит плагин FDiscordLink с игровых серверов (<PANEL_URL>/link-api).
+# Ключ API проверяет сам бот, Caddy только передаёт настоящий IP для ограничения неверных ключей.
+(linkapi) {
+	handle /link-api/* {
+		reverse_proxy {args[0]} {
+			header_up X-Forwarded-For {client_ip}
+		}
+	}
+}
+
 bots.flamerust.gg {
-	import panel 127.0.0.1:3000
+	import linkapi 127.0.0.1:3010
+	handle {
+		import panel 127.0.0.1:3000
+	}
 }
 
 # Тестовая копия (ветка dev). Удали блок, если тестовая копия не нужна.
 # Имя именно bots-staging, а не staging.bots: бесплатный сертификат Cloudflare
 # покрывает только один уровень поддоменов (*.flamerust.gg).
 bots-staging.flamerust.gg {
-	import panel 127.0.0.1:3001
+	import linkapi 127.0.0.1:3011
+	handle {
+		import panel 127.0.0.1:3001
+	}
 }

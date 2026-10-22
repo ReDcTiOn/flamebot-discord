@@ -10,7 +10,7 @@ import { generateSecretKeyPair, loadPrivateKey, openSecret, sealSecret } from ".
 // или взломанная панель не дают прочитать ни одного токена.
 
 // Боты, токен которых вводится в панели (раздел «Подключение»).
-export const CONNECTABLE_BOTS = ["rating", "giveaway"] as const;
+export const CONNECTABLE_BOTS = ["link", "rating", "giveaway"] as const;
 export type ConnectableBot = (typeof CONNECTABLE_BOTS)[number];
 
 export const tokenContext = (botKey: string) => `bot:${botKey}:discordToken`;

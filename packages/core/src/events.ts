@@ -32,6 +32,13 @@ export async function recordEvent(db: Db, e: BotEventInput): Promise<void> {
 
 // Группы событий для фильтров в панели, по ботам: префикс type → название.
 export const EVENT_GROUPS_BY_BOT: Record<string, Record<string, string>> = {
+  link: {
+    link: "Привязки",
+    role: "Роли",
+    panel: "Сообщение в канале",
+    api: "Игровые серверы",
+    bot: "Система",
+  },
   rating: {
     shop: "Магазин",
     rank: "Ранги",

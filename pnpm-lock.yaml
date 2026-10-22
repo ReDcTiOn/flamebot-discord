@@ -33,6 +33,28 @@ importers:
         specifier: 5.9.3
         version: 5.9.3
 
+  apps/link-bot:
+    dependencies:
+      '@flamebot/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      discord.js:
+        specifier: 14.27.0
+        version: 14.27.0
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@types/node':
+        specifier: 22.20.5
+        version: 22.20.5
+      tsx:
+        specifier: 4.23.15
+        version: 4.23.15
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
   apps/maps-bot:
     dependencies:
       '@flamebot/core':

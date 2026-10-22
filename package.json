@@ -6,12 +6,13 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "pnpm -F @flamebot/core build && pnpm -F rating-bot build && pnpm -F online-bot build && pnpm -F giveaway-bot build && pnpm -F maps-bot build && pnpm -F notice-bot build && pnpm -F panel build",
+    "build": "pnpm -F @flamebot/core build && pnpm -F link-bot build && pnpm -F rating-bot build && pnpm -F online-bot build && pnpm -F giveaway-bot build && pnpm -F maps-bot build && pnpm -F notice-bot build && pnpm -F panel build",
     "typecheck": "pnpm -F @flamebot/core build && pnpm -r typecheck",
     "test": "pnpm -F @flamebot/core test",
     "db:generate": "pnpm -F @flamebot/core db:generate",
     "db:migrate": "pnpm -F @flamebot/core db:migrate",
     "db:deploy": "pnpm -F @flamebot/core db:deploy",
+    "dev:link-bot": "pnpm -F @flamebot/core build && pnpm -F link-bot dev",
     "dev:rating-bot": "pnpm -F @flamebot/core build && pnpm -F rating-bot dev",
     "dev:panel": "pnpm -F @flamebot/core build && pnpm -F panel dev",
     "deploy-commands": "pnpm -F rating-bot deploy-commands",

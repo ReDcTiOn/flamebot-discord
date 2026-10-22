@@ -59,6 +59,8 @@ def=$(current COMPOSE_PROJECT_NAME); ask PROJECT "Имя копии в Docker (f
 PG=$(current POSTGRES_PASSWORD); PG=${PG:-$(random_hex 24)}
 SESSION=$(current SESSION_SECRET); SESSION=${SESSION:-$(random_hex 32)}
 RCON=$(current ALLOW_PRIVATE_RCON); RCON=${RCON:-false}
+# API бота привязки Steam: у рабочей копии 3010, у тестовой (панель на 3001) — 3011.
+LINK_PORT=$(current LINK_API_PORT); LINK_PORT=${LINK_PORT:-$((PORT + 10))}
 
 # Старые переменные оставляем, если они были: боты перенесут их в базу при первом запуске.
 legacy=""
@@ -77,6 +79,7 @@ GUILD_ID=$GUILD
 PANEL_URL=$PANEL
 TRUST_PROXY=$TRUST
 PANEL_PORT=$PORT
+LINK_API_PORT=$LINK_PORT
 COMPOSE_PROJECT_NAME=$PROJECT
 SESSION_SECRET=$SESSION
 POSTGRES_PASSWORD=$PG

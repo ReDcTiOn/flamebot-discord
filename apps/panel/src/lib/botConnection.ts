@@ -11,6 +11,12 @@ export interface BotConnectionMeta {
 }
 
 export const BOT_CONNECTIONS: Record<ConnectableBot, BotConnectionMeta> = {
+  link: {
+    title: "Бот привязки Steam",
+    permissions: "268520448",
+    permissionsText: "просмотр каналов, отправка сообщений, встраивание ссылок, чтение истории сообщений, управление ролями",
+    intents: null,
+  },
   rating: {
     title: "Бот рейтинга",
     permissions: "268487680",

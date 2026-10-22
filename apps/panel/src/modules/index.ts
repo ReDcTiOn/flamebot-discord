@@ -56,9 +56,31 @@ export type IconName =
   | "ticket"
   | "plug"
   | "plus"
-  | "map";
+  | "map"
+  | "link"
+  | "key";
 
 export const modules: PanelModule[] = [
+  {
+    key: "link",
+    title: "Привязка Steam",
+    description: "Игрок пишет /connect на сервере RUST и вводит код в Discord: Steam и Discord связываются, игрок получает роль",
+    icon: "link",
+    color: "#2a75bb",
+    sections: [
+      { title: null, items: [{ href: "/link", label: "Обзор", icon: "dashboard" }] },
+      { title: "Привязки", items: [{ href: "/link/links", label: "Все привязки", icon: "users" }] },
+      {
+        title: "Настройки",
+        items: [
+          { href: "/link/settings", label: "Канал и роль", icon: "layers" },
+          { href: "/link/servers", label: "Игровые серверы", icon: "key", fullOnly: true },
+          { href: "/link/connection", label: "Подключение", icon: "plug", fullOnly: true },
+        ],
+      },
+      { title: "Журнал", items: [{ href: "/link/events", label: "История", icon: "list" }] },
+    ],
+  },
   {
     key: "rating",
     title: "Рейтинг участников",

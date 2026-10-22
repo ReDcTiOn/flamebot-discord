@@ -1,5 +1,6 @@
 # Один Dockerfile на весь монорепозиторий. Цели:
 #   build      — сборка всего; используется и для миграций
+#   link-bot   — бот привязки Steam к Discord (и HTTP API для плагина на игровых серверах)
 #   rating-bot — рейтинг-бот
 #   online-bot — бот онлайна серверов
 #   giveaway-bot — бот розыгрышей
@@ -12,6 +13,7 @@ RUN apk add --no-cache openssl && corepack enable
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY packages/core/package.json packages/core/
+COPY apps/link-bot/package.json apps/link-bot/
 COPY apps/rating-bot/package.json apps/rating-bot/
 COPY apps/online-bot/package.json apps/online-bot/
 COPY apps/giveaway-bot/package.json apps/giveaway-bot/
@@ -29,7 +31,25 @@ COPY apps apps
 # Права файлов приходят из папки на сервере. Если git писал их со строгим umask (077), боты
 # под пользователем node не прочитают package.json ядра и упадут с ERR_MODULE_NOT_FOUND.
 RUN chmod -R a+rX package.json pnpm-workspace.yaml packages apps
-RUN pnpm -F @flamebot/core build && pnpm -F rating-bot build && pnpm -F online-bot build && pnpm -F giveaway-bot build && pnpm -F maps-bot build && pnpm -F notice-bot build && pnpm -F panel build
+RUN pnpm -F @flamebot/core build && pnpm -F link-bot build && pnpm -F rating-bot build && pnpm -F online-bot build && pnpm -F giveaway-bot build && pnpm -F maps-bot build && pnpm -F notice-bot build && pnpm -F panel build
+
+FROM node:22-alpine AS link-bot
+RUN apk add --no-cache openssl
+ENV NODE_ENV=production
+WORKDIR /app
+COPY --from=build /app/package.json /app/pnpm-workspace.yaml ./
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/packages/core ./packages/core
+COPY --from=build /app/apps/link-bot/package.json ./apps/link-bot/package.json
+COPY --from=build /app/apps/link-bot/node_modules ./apps/link-bot/node_modules
+COPY --from=build /app/apps/link-bot/dist ./apps/link-bot/dist
+# Том бота: здесь лежит его ключ шифрования токена. Принадлежит пользователю node.
+RUN mkdir -p /data && chown node:node /data && chmod 700 /data
+ENV BOT_DATA_DIR=/data LINK_API_HOST=0.0.0.0 LINK_API_PORT=3010
+USER node
+EXPOSE 3010
+WORKDIR /app/apps/link-bot
+CMD ["node", "dist/index.js"]
 
 FROM node:22-alpine AS rating-bot
 RUN apk add --no-cache openssl
