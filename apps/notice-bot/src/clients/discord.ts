@@ -22,14 +22,20 @@ export function discordPayload(payload: Record<string, unknown>, img: Image): Re
   return body;
 }
 
+// payload_json — обычное текстовое поле. Если передать его Blob-ом, Node подпишет его как файл «blob»,
+// и Discord пришлёт JSON вложением, а текст, embed и упоминания потеряются.
+export function discordForm(payload: Record<string, unknown>, img: Image): FormData {
+  const form = new FormData();
+  form.set("payload_json", JSON.stringify(discordPayload(payload, img)));
+  form.set("files[0]", new Blob([new Uint8Array(img.data)], { type: img.mime }), uploadName(img));
+  return form;
+}
+
 export async function sendDiscord(url: string, payload: Record<string, unknown>, img: Image): Promise<string> {
-  const body = JSON.stringify(discordPayload(payload, img));
   // Повторяем только то, что точно не создало сообщение: 429 и «не смогли соединиться».
   // Таймаут и 5xx не повторяем: иначе можно продублировать пост.
   for (let attempt = 1; attempt <= 3; attempt++) {
-    const form = new FormData();
-    form.set("payload_json", new Blob([body], { type: "application/json" }));
-    form.set("files[0]", new Blob([new Uint8Array(img.data)], { type: img.mime }), uploadName(img));
+    const form = discordForm(payload, img);
     let res: Response;
     try {
       res = await fetch(`${url}?wait=true`, { method: "POST", body: form, signal: AbortSignal.timeout(60_000) });
