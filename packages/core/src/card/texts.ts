@@ -12,7 +12,7 @@ export const PROFILE_TEXT_DEFAULTS = {
   footer: "-# Купить ещё – /shop",
 } as const;
 
-export type ProfileTexts = { [K in keyof typeof PROFILE_TEXT_DEFAULTS]: string };
+export type ProfileTexts = { -readonly [K in keyof typeof PROFILE_TEXT_DEFAULTS]: string };
 
 const line = z.string().trim().max(300);
 
