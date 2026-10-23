@@ -5,7 +5,7 @@ import { DangerZone, PageHead, Section } from "@/components/Fields";
 import { SecretField } from "@/components/SecretField";
 import { clearBotToken, saveBotToken } from "@/app/(panel)/connection/actions";
 import { requirePage } from "@/lib/auth";
-import { BOT_CONNECTIONS, inviteUrl } from "@/lib/botConnection";
+import { BOT_CONNECTIONS, combinedPermissions, inviteUrl } from "@/lib/botConnection";
 import { avatarUrl } from "@/lib/discord";
 
 // Бот отмечается раз в 30 секунд. Дольше двух минут тишины — сервис бота не запущен.
@@ -19,11 +19,17 @@ function when(d: Date): string {
 export async function BotConnection({ botKey }: { botKey: ConnectableBot }) {
   await requirePage("full");
   const meta = BOT_CONNECTIONS[botKey];
-  const [cred, status, key] = await Promise.all([
+  const [cred, status, key, others] = await Promise.all([
     prisma.botCredential.findUnique({ where: { botKey } }),
     prisma.botStatus.findUnique({ where: { botKey } }),
     prisma.botPublicKey.findUnique({ where: { botKey } }),
+    prisma.botStatus.findMany({ where: { botKey: { in: Object.keys(BOT_CONNECTIONS).filter((k) => k !== botKey) } } }),
   ]);
+  // Тот же бот Discord (один токен) у других модулей: покажем это и сложим права в приглашении.
+  const sharedWith = status?.discordUserId
+    ? others.filter((o) => o.discordUserId === status.discordUserId).map((o) => o.botKey as ConnectableBot)
+    : [];
+  const permissions = combinedPermissions([botKey, ...sharedWith]);
 
   const hasToken = !!cred?.discordTokenEnc;
   const alive = !!status && Date.now() - status.heartbeatAt.getTime() < STALE_MS;
@@ -57,11 +63,12 @@ export async function BotConnection({ botKey }: { botKey: ConnectableBot }) {
               <div className="setting-title">{status?.discordUserTag ?? meta.title}</div>
               <div className="setting-hint" style={alive && status.state === "failed" ? { color: "var(--danger)" } : undefined}>
                 {stateText}
+                {sharedWith.length > 0 && ` · тот же бот Discord, что у: ${sharedWith.map((b) => BOT_CONNECTIONS[b].title.toLowerCase()).join(", ")}`}
               </div>
             </div>
             {status?.discordUserId && (
               <div className="setting-control">
-                <a className="btn" href={inviteUrl(status.discordUserId, meta.permissions)} target="_blank" rel="noopener noreferrer">
+                <a className="btn" href={inviteUrl(status.discordUserId, permissions)} target="_blank" rel="noopener noreferrer">
                   Пригласить на сервер
                 </a>
               </div>
@@ -106,6 +113,7 @@ export async function BotConnection({ botKey }: { botKey: ConnectableBot }) {
               />
               <div className="muted" style={{ fontSize: 12.5 }}>
                 Права для приглашения: {meta.permissionsText}.
+                {meta.sharedHint ? ` ${meta.sharedHint}` : ""}
                 {meta.intents ? ` В Developer Portal → Bot включи ${meta.intents}.` : " Привилегированные интенты не нужны."}
               </div>
               <div className="form-actions">

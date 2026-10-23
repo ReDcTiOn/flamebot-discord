@@ -30,9 +30,17 @@ async function safeReply(interaction: RepliableInteraction, message: string) {
   }
 }
 
+// Тем же токеном может работать бот привязки Steam: события приходят обоим процессам.
+// Чужие команды, кнопки и окна не трогаем вовсе, даже ограничением частоты, иначе ответим за другого бота.
+function isOurs(interaction: Interaction): boolean {
+  if (interaction.isChatInputCommand()) return byName.has(interaction.commandName);
+  if (interaction.isMessageComponent() || interaction.isModalSubmit()) return byPrefix.has(interaction.customId.split(":")[0] ?? "");
+  return false;
+}
+
 export async function handleInteraction(interaction: Interaction): Promise<void> {
   if (!interaction.inCachedGuild() || interaction.guildId !== config.GUILD_ID) return;
-  if (!interaction.isRepliable()) return;
+  if (!interaction.isRepliable() || !isOurs(interaction)) return;
 
   if (!limiter.take(interaction.user.id)) {
     await safeReply(interaction, "Слишком часто. Подожди пару секунд.");
