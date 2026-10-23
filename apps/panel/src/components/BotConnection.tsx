@@ -30,6 +30,8 @@ export async function BotConnection({ botKey }: { botKey: ConnectableBot }) {
     ? others.filter((o) => o.discordUserId === status.discordUserId).map((o) => o.botKey as ConnectableBot)
     : [];
   const permissions = combinedPermissions([botKey, ...sharedWith]);
+  // Общий бот разрешён, но два модуля со слэш-командами затирают команды друг друга.
+  const commandClash = meta.slashCommands ? sharedWith.filter((b) => BOT_CONNECTIONS[b].slashCommands) : [];
 
   const hasToken = !!cred?.discordTokenEnc;
   const alive = !!status && Date.now() - status.heartbeatAt.getTime() < STALE_MS;
@@ -47,6 +49,13 @@ export async function BotConnection({ botKey }: { botKey: ConnectableBot }) {
         title="Подключение"
         hint="Токен бота Discord задаётся здесь, а не в .env. Он хранится зашифрованным ключом самого бота: после сохранения его не прочитает ни панель, ни тот, у кого окажется копия базы."
       />
+
+      {commandClash.length > 0 && (
+        <p className="notice warn">
+          Этот бот Discord работает и у модуля {commandClash.map((b) => `«${BOT_CONNECTIONS[b].title}»`).join(", ")}. У обоих свои слэш-команды: каждый при запуске
+          переписывает весь список, и команды одного пропадут у другого. Создай для одного из них отдельное приложение Discord.
+        </p>
+      )}
 
       <Section title="Статус">
         <div className="tiles group">

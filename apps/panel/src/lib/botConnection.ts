@@ -8,6 +8,8 @@ export interface BotConnectionMeta {
   permissionsText: string;
   // Что включить в Developer Portal → Bot.
   intents: string | null;
+  // Регистрирует слэш-команды. Два таких модуля на одном боте Discord затирают команды друг друга: панель предупреждает.
+  slashCommands: boolean;
   // Подсказка, с каким модулем можно делить один токен.
   sharedHint?: string;
 }
@@ -18,13 +20,15 @@ export const BOT_CONNECTIONS: Record<ConnectableBot, BotConnectionMeta> = {
     permissions: "268520448",
     permissionsText: "просмотр каналов, отправка сообщений, встраивание ссылок, чтение истории сообщений, управление ролями",
     intents: null,
-    sharedHint: "Можно вставить тот же токен, что у бота рейтинга: в Discord это будет один бот.",
+    slashCommands: false,
+    sharedHint: "Можно вставить тот же токен, что у бота рейтинга или розыгрышей: в Discord это будет один бот.",
   },
   rating: {
     title: "Бот рейтинга",
     permissions: "268487680",
     permissionsText: "просмотр каналов, отправка сообщений, встраивание ссылок, прикрепление файлов, управление ролями",
     intents: "Message Content Intent: без него бот не видит длину сообщений и не начисляет опыт",
+    slashCommands: true,
     sharedHint: "Этот же токен можно вставить в «Привязку Steam»: в Discord это будет один бот.",
   },
   giveaway: {
@@ -32,6 +36,8 @@ export const BOT_CONNECTIONS: Record<ConnectableBot, BotConnectionMeta> = {
     permissions: "84992",
     permissionsText: "просмотр каналов, отправка сообщений, встраивание ссылок, чтение истории сообщений",
     intents: null,
+    slashCommands: true,
+    sharedHint: "Этот же токен можно вставить в «Привязку Steam». С рейтингом лучше не делить: у обоих свои слэш-команды.",
   },
 };
 

@@ -558,6 +558,12 @@ export async function handleInteraction(interaction: Interaction): Promise<void>
     return;
   }
   if (!interaction.isRepliable()) return;
+  // Тем же токеном может работать бот привязки Steam: события приходят обоим процессам.
+  // Чужие кнопки и окна не трогаем вовсе, даже ограничением частоты, иначе ответим за другого бота.
+  const ours = interaction.isChatInputCommand()
+    ? interaction.commandName === COMMAND_NAME
+    : (interaction.isMessageComponent() || interaction.isModalSubmit()) && interaction.customId.startsWith("giveaway:");
+  if (!ours) return;
 
   if (!limiter.take(interaction.user.id)) {
     await interaction.reply({ content: "Слишком часто. Подожди пару секунд.", flags: ephemeral }).catch(() => undefined);

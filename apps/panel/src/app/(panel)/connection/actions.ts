@@ -44,14 +44,6 @@ export async function saveBotToken(_prev: ActionResult, fd: FormData): Promise<A
     if (!key) throw new ActionError(`${meta.title} ещё ни разу не запускался: запусти его, чтобы панель получила ключ шифрования.`);
 
     const discordUser = await checkWithDiscord(token);
-    // Один бот Discord — один модуль: иначе команды двух модулей затирали бы друг друга.
-    const clash = await prisma.botStatus.findFirst({
-      where: { discordUserId: discordUser.id, botKey: { not: botKey, in: [...CONNECTABLE_BOTS] } },
-    });
-    if (clash) {
-      const other = BOT_CONNECTIONS[clash.botKey as ConnectableBot]?.title ?? clash.botKey;
-      throw new ActionError(`Этот бот уже подключён к модулю «${other}». Каждому модулю нужно своё приложение Discord.`);
-    }
 
     const sealed = sealSecret(key.publicKey, token, tokenContext(botKey));
     const data = { discordTokenEnc: sealed, tokenSetAt: new Date(), tokenSetById: user.id, tokenSetByName: user.username };
@@ -59,7 +51,19 @@ export async function saveBotToken(_prev: ActionResult, fd: FormData): Promise<A
     // Значение токена в журнал не пишем: только кто и какого бота подключил.
     await audit(user, botKey, "bot.token.set", discordUser.username, { botUserId: discordUser.id });
     revalidatePath(`/${botKey}/connection`);
-    return `Токен сохранён. Бот «${discordUser.username}» переподключится в течение 10 секунд.`;
+
+    // Один бот Discord можно поставить на несколько модулей. Не запрещаем, но предупреждаем,
+    // если у обоих свои слэш-команды: каждый при запуске переписывает весь список и затирает команды другого.
+    const shared = (await prisma.botStatus.findMany({ where: { discordUserId: discordUser.id, botKey: { not: botKey, in: [...CONNECTABLE_BOTS] } } }))
+      .map((s) => s.botKey as ConnectableBot)
+      .filter((k) => BOT_CONNECTIONS[k]);
+    const saved = `Токен сохранён. Бот «${discordUser.username}» переподключится в течение 10 секунд.`;
+    if (shared.length === 0) return saved;
+    const names = shared.map((k) => `«${BOT_CONNECTIONS[k].title}»`).join(", ");
+    const clash = meta.slashCommands && shared.some((k) => BOT_CONNECTIONS[k].slashCommands);
+    return clash
+      ? `${saved} Внимание: этот же бот работает у ${names}, и у обоих свои слэш-команды — команды одного пропадут у другого.`
+      : `${saved} Этот же бот работает у ${names}.`;
   });
 }
 
