@@ -15,7 +15,8 @@ import {
 } from "@flamebot/core";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { AutoRefresh } from "@/components/AutoRefresh";
-import { BotPower } from "@/components/BotPower";
+import { BotHeaderStatus } from "@/components/BotPower";
+import { SetupChecklist, type SetupItem } from "@/components/SetupChecklist";
 import { EmptyState, PageHead, Section } from "@/components/Fields";
 import { NoticeButton } from "@/components/NoticeButton";
 import { requirePage } from "@/lib/auth";
@@ -41,14 +42,16 @@ export default async function NoticesOverview() {
   ]);
   const have = new Set(secrets.map((x) => x.name));
   const imgs = new Set(images.map((x) => x.kind));
-  const missing = [
-    ...NOTICE_SECRETS.filter((m) => m.required && !have.has(m.name)).map((m) => m.label),
-    ...(!s.telegramAdminIds.length ? ["Telegram ID админов"] : []),
-    ...(!s.vkGroupId ? ["ID сообщества ВКонтакте"] : []),
-    ...(!s.gamestoresStoreId || !have.has("gamestoresSecretKey") ? ["ключи gamestores"] : []),
-    ...(["regular", "global"] as const).filter((k) => !imgs.has(k)).map((k) => `картинка поста (${NOTICE_KIND_LABEL[k]})`),
-  ];
   const ruleProblems = rules.filter((r) => r.enabled).flatMap((r) => noticeRuleProblems(r, templates).map((p) => `${r.key}: ${p}`));
+  const connection = user.level === "full" ? "/notices/connection" : null;
+  const setup: SetupItem[] = [
+    ...NOTICE_SECRETS.filter((m) => m.required).map((m) => ({ done: have.has(m.name), text: m.label, href: connection, linkLabel: "Подключение" })),
+    { done: s.telegramAdminIds.length > 0, text: "Telegram ID админов", href: "/notices/settings" },
+    { done: !!s.vkGroupId, text: "ID сообщества ВКонтакте", href: "/notices/settings" },
+    { done: !!s.gamestoresStoreId && have.has("gamestoresSecretKey"), text: "Ключи gamestores", href: connection, linkLabel: "Подключение" },
+    ...(["regular", "global"] as const).map((k) => ({ done: imgs.has(k), text: `Картинка поста (${NOTICE_KIND_LABEL[k]})`, href: "/notices/settings", linkLabel: "Загрузить" })),
+    { done: ruleProblems.length === 0, text: "Тексты выбраны во всём расписании", hint: `по таким вайпам бот ничего не пришлёт: ${ruleProblems.join("; ")}`, href: "/notices/rules", linkLabel: "Исправить", error: true },
+  ];
   const byId = new Map(templates.map((t) => [t.id, t]));
 
   const wipes = noticeWipesBetween(rules, s.timezone, new Date(now.getTime() - s.maxLateMinutes * 60_000), new Date(now.getTime() + 8 * DAY)).slice(0, 8);
@@ -60,31 +63,12 @@ export default async function NoticesOverview() {
       <PageHead title="Объявления о вайпах" hint={`Время — ${s.timezoneLabel}. Всё, что здесь можно сделать, можно сделать и кнопками бота в Telegram.`}>
         <div className="head-actions">
           <AutoRefresh seconds={10} />
-          <BotPower botKey="notices" title="Объявления о вайпах" state={botState} canControl={user.level === "full"} />
+          <BotHeaderStatus botKey="notices" title="Объявления о вайпах" state={botState} canControl={user.level === "full"} />
         </div>
       </PageHead>
 
       {s.dryRun && <p className="notice warn">Включён пробный режим: наружу ничего не уходит, промокоды не создаются. Выключить — в «Настройках».</p>}
-      {missing.length > 0 && (
-        <p className="notice warn">
-          Не настроено: {missing.join(", ")}.{" "}
-          <Link href={user.level === "full" ? "/notices/connection" : "/notices/settings"} className="link">
-            Настроить
-          </Link>
-        </p>
-      )}
-      {ruleProblems.length > 0 && (
-        <p className="notice warn">
-          В расписании не выбраны тексты, по таким вайпам бот ничего не пришлёт: {ruleProblems.join("; ")}.{" "}
-          <Link href="/notices/rules" className="link">Исправить</Link>
-        </p>
-      )}
-      {problems > 0 && (
-        <p className="notice warn">
-          За сутки предупреждений или ошибок: {problems}.{" "}
-          <Link href="/notices/events?level=problems" className="link">Открыть историю</Link>
-        </p>
-      )}
+      <SetupChecklist items={setup} problems={problems} historyHref="/notices/events?level=problems" />
 
       <Section title="Ближайшие вайпы" hint={`Текст приходит на подтверждение за ${Math.round((s.notifyMinutes / 60) * 10) / 10} ч. Не подтвердили — в назначенное время уйдёт текст по умолчанию.`}>
         {wipes.length === 0 ? (

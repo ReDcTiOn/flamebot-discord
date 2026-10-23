@@ -9,8 +9,8 @@ import { useEffect, useState, useTransition } from "react";
 export function AutoRefresh({ seconds = 10 }: { seconds?: number }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [updatedAt, setUpdatedAt] = useState(() => Date.now());
-  const [now, setNow] = useState(() => Date.now());
+  // Номер такта: меняется при каждом обновлении и перезапускает заполнение кольца.
+  const [cycle, setCycle] = useState(0);
   const [paused, setPaused] = useState(false);
 
   useEffect(() => {
@@ -22,7 +22,7 @@ export function AutoRefresh({ seconds = 10 }: { seconds?: number }) {
       startTransition(() => {
         router.refresh();
       });
-      setUpdatedAt(Date.now());
+      setCycle((n) => n + 1);
     };
     const t = setInterval(refresh, seconds * 1000);
     // Вернулись на вкладку — сразу обновляем, не ждём следующего такта.
@@ -34,18 +34,15 @@ export function AutoRefresh({ seconds = 10 }: { seconds?: number }) {
     };
   }, [router, seconds]);
 
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
+  const label = pending ? "Обновляю данные…" : paused ? "Обновление на паузе" : `Данные обновляются сами каждые ${seconds} с`;
 
-  const ago = Math.max(0, Math.round((now - updatedAt) / 1000));
-  const label = pending ? "Обновляю…" : paused ? "Обновление на паузе" : ago < 2 ? "Обновлено только что" : `Обновлено ${ago} с назад`;
-
+  // Кольцо заполняется до следующего обновления. Без подписи: подробности — в подсказке.
   return (
-    <span className={paused ? "live-chip paused" : "live-chip"} title={`Данные обновляются сами каждые ${seconds} с`} aria-live="off">
-      <span className="live-dot" aria-hidden="true" />
-      {label}
+    <span className={paused ? "live-ring paused" : pending ? "live-ring pending" : "live-ring"} title={label} role="img" aria-label={label}>
+      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+        <circle cx="8" cy="8" r="6" className="live-ring-track" />
+        <circle key={cycle} cx="8" cy="8" r="6" className="live-ring-fill" style={{ animationDuration: `${seconds}s` }} />
+      </svg>
     </span>
   );
 }

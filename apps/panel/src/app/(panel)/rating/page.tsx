@@ -2,7 +2,8 @@ import Link from "next/link";
 import { formatNumber, prisma, startOfUtcDay } from "@flamebot/core";
 import { requirePage } from "@/lib/auth";
 import { AutoRefresh } from "@/components/AutoRefresh";
-import { BotPower } from "@/components/BotPower";
+import { BotHeaderStatus } from "@/components/BotPower";
+import { SetupChecklist } from "@/components/SetupChecklist";
 import { getBotStates } from "@/lib/botState";
 import { PageHead } from "@/components/Fields";
 import { ScrapIcon } from "@/components/ScrapIcon";
@@ -17,7 +18,7 @@ export default async function RatingOverview() {
   const today = startOfUtcDay();
   const from = new Date(today.getTime() - (DAYS - 1) * 86_400_000);
 
-  const [members, activeToday, scrap, stats, purchases, ranks, problems, pendingRequests] = await Promise.all([
+  const [members, activeToday, scrap, stats, purchases, ranks, problems, pendingRequests, token] = await Promise.all([
     prisma.member.count({ where: { inGuild: true } }),
     prisma.member.count({ where: { lastXpAt: { gte: today } } }),
     prisma.member.aggregate({ _sum: { scrap: true } }),
@@ -26,6 +27,7 @@ export default async function RatingOverview() {
     prisma.rank.findMany({ orderBy: { minXp: "asc" }, include: { _count: { select: { members: true } } } }),
     prisma.botEvent.count({ where: { botKey: "rating", level: { in: ["WARN", "ERROR"] }, createdAt: { gte: new Date(Date.now() - 86_400_000) } } }),
     prisma.customRoleRequest.count({ where: { status: "PENDING" } }),
+    prisma.botCredential.findUnique({ where: { botKey: "rating" }, select: { discordTokenEnc: true } }),
   ]);
 
   const byDay = new Map(stats.map((s) => [s.date.toISOString().slice(0, 10), s]));
@@ -43,18 +45,18 @@ export default async function RatingOverview() {
       <PageHead title="Рейтинг участников" hint="Сводка по активности и экономике сервера.">
         <div className="head-actions">
           <AutoRefresh seconds={10} />
-          <BotPower botKey="rating" title="Рейтинг участников" state={botState} canControl={user.level === "full"} />
+          <BotHeaderStatus botKey="rating" title="Рейтинг участников" state={botState} canControl={user.level === "full"} />
         </div>
       </PageHead>
 
-      {problems > 0 && (
-        <p className="notice warn">
-          За последние сутки {formatNumber(problems)} предупреждений или ошибок бота.{" "}
-          <Link href="/rating/events?level=problems" className="link">
-            Открыть историю
-          </Link>
-        </p>
-      )}
+      <SetupChecklist
+        items={[
+          { done: !!token?.discordTokenEnc, text: "Токен бота Discord", href: user.level === "full" ? "/rating/connection" : null, linkLabel: "Подключение", error: !token?.discordTokenEnc },
+          { done: ranks.length > 0, text: "Ранги", hint: "без них игрокам нечего получать", href: "/rating/xp?tab=ranks", linkLabel: "Добавить" },
+        ]}
+        problems={problems}
+        historyHref="/rating/events?level=problems"
+      />
       {pendingRequests > 0 && (
         <p className="notice">
           Заявок на личные роли ждёт решения: {formatNumber(pendingRequests)}.{" "}

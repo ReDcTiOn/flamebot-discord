@@ -902,6 +902,8 @@ model BotStatus {
   botKey      String   @id
   heartbeatAt DateTime
   state       String   @default("running")
+  // С какого момента работает без перерыва; null — сейчас не работает.
+  startedAt   DateTime?
   // Под каким аккаунтом бот вошёл в Discord и почему не смог войти. Пишет сам бот.
   discordUserId  String?
   discordUserTag String?

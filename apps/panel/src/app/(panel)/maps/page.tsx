@@ -11,7 +11,8 @@ import {
 } from "@flamebot/core";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { AutoRefresh } from "@/components/AutoRefresh";
-import { BotPower } from "@/components/BotPower";
+import { BotHeaderStatus } from "@/components/BotPower";
+import { SetupChecklist, type SetupItem } from "@/components/SetupChecklist";
 import { EmptyState, PageHead, Section } from "@/components/Fields";
 import { MapsButton } from "@/components/MapsButton";
 import { requirePage } from "@/lib/auth";
@@ -39,12 +40,14 @@ export default async function MapsOverview() {
     prisma.botEvent.count({ where: { botKey: "maps", level: { in: ["WARN", "ERROR"] }, createdAt: { gte: new Date(Date.now() - 86_400_000) } } }),
   ]);
   const have = new Set(secrets.map((x) => x.name));
-  const missing = [
-    ...MAPS_SECRETS.filter((m) => m.required && !have.has(m.name)).map((m) => m.label),
-    ...(!s.s3Endpoint || !s.s3Bucket || !s.cdnBaseUrl ? ["адрес S3, бакет и адрес CDN"] : []),
-    ...(have.has("telegramToken") && !s.telegramAdminIds.length ? ["Telegram ID админов"] : []),
-  ];
   const ruleProblems = rules.flatMap((r) => mapsRuleProblems(r, servers).map((p) => `${r.key}: ${p}`));
+  const connection = user.level === "full" ? "/maps/connection" : null;
+  const setup: SetupItem[] = [
+    ...MAPS_SECRETS.filter((m) => m.required).map((m) => ({ done: have.has(m.name), text: m.label, href: connection, linkLabel: "Подключение" })),
+    { done: !!(s.s3Endpoint && s.s3Bucket && s.cdnBaseUrl), text: "Адрес S3, бакет и адрес CDN", href: "/maps/settings" },
+    ...(have.has("telegramToken") ? [{ done: s.telegramAdminIds.length > 0, text: "Telegram ID админов", href: "/maps/settings" }] : []),
+    { done: ruleProblems.length === 0, text: "Расписание без ошибок", hint: `по таким правилам генерация не начнётся: ${ruleProblems.join("; ")}`, href: "/maps/rules", linkLabel: "Исправить", error: true },
+  ];
   const titles = new Map(servers.map((x) => [x.id, x.title]));
   const started = new Set((await prisma.mapsCycle.findMany({ select: { id: true } })).map((c) => c.id));
   const wipes = upcomingWipes(rules, s.timezone).slice(0, 5);
@@ -54,30 +57,11 @@ export default async function MapsOverview() {
       <PageHead title="Карты вайпов" hint={`Время — ${s.timezoneLabel}. Всё, что здесь можно сделать, можно сделать и кнопками бота в Telegram.`}>
         <div className="head-actions">
           <AutoRefresh seconds={10} />
-          <BotPower botKey="maps" title="Карты вайпов" state={botState} canControl={user.level === "full"} />
+          <BotHeaderStatus botKey="maps" title="Карты вайпов" state={botState} canControl={user.level === "full"} />
         </div>
       </PageHead>
 
-      {missing.length > 0 && (
-        <p className="notice warn">
-          Не настроено: {missing.join(", ")}.{" "}
-          <Link href={user.level === "full" ? "/maps/connection" : "/maps/settings"} className="link">
-            Настроить
-          </Link>
-        </p>
-      )}
-      {ruleProblems.length > 0 && (
-        <p className="notice warn">
-          Расписание с ошибками, по таким правилам генерация не начнётся: {ruleProblems.join("; ")}.{" "}
-          <Link href="/maps/rules" className="link">Исправить</Link>
-        </p>
-      )}
-      {problems > 0 && (
-        <p className="notice warn">
-          За сутки предупреждений или ошибок: {problems}.{" "}
-          <Link href="/maps/events?level=problems" className="link">Открыть историю</Link>
-        </p>
-      )}
+      <SetupChecklist items={setup} problems={problems} historyHref="/maps/events?level=problems" />
 
       <Section title="Подготовка к вайпам" hint="Вайпы, где генерация уже идёт. Нажми, чтобы выбрать карты, подтвердить и управлять анонсом.">
         {open.length === 0 ? (

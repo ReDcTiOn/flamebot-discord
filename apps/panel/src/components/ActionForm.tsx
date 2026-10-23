@@ -134,3 +134,13 @@ export function IconSubmit({ label, children, danger = false }: { label: string;
     </button>
   );
 }
+
+// Переключатель, который сразу отправляет форму (включить или выключить бота).
+export function SwitchSubmit({ checked, label }: { checked: boolean; label: string }) {
+  const pending = useContext(PendingContext);
+  return (
+    <button type="submit" role="switch" aria-checked={checked} aria-label={label} title={label} className="switch-btn" disabled={pending} aria-busy={pending}>
+      <span aria-hidden="true" />
+    </button>
+  );
+}

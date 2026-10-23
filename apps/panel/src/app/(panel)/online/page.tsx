@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { formatNumber, prisma, type OnlineState } from "@flamebot/core";
 import { AutoRefresh } from "@/components/AutoRefresh";
-import { BotPower } from "@/components/BotPower";
+import { BotHeaderStatus } from "@/components/BotPower";
+import { SetupChecklist } from "@/components/SetupChecklist";
 import { getBotStates } from "@/lib/botState";
 import { EmptyState, PageHead } from "@/components/Fields";
 import { requirePage } from "@/lib/auth";
@@ -26,12 +27,10 @@ function ago(d: Date | null | undefined): string {
 export default async function OnlineOverview() {
   const user = await requirePage();
   const botState = (await getBotStates(["online"])).online!;
-  const [servers, status, problems] = await Promise.all([
+  const [servers, problems] = await Promise.all([
     prisma.onlineServer.findMany({ orderBy: [{ sortOrder: "asc" }, { id: "asc" }], include: { status: true } }),
-    prisma.botStatus.findUnique({ where: { botKey: "online" } }),
     prisma.botEvent.count({ where: { botKey: "online", level: { in: ["WARN", "ERROR"] }, createdAt: { gte: new Date(Date.now() - 86_400_000) } } }),
   ]);
-  const botOnline = !!status && Date.now() - status.heartbeatAt.getTime() < 3 * 60_000;
 
   const online = servers.filter((s) => s.status?.state === "ONLINE");
   const players = online.reduce((n, s) => n + (s.status?.players ?? 0), 0);
@@ -43,23 +42,15 @@ export default async function OnlineOverview() {
       <PageHead title="Онлайн серверов" hint="Статусы игровых серверов в реальном времени.">
         <div className="head-actions">
           <AutoRefresh seconds={5} />
-          <BotPower botKey="online" title="Онлайн серверов" state={botState} canControl={user.level === "full"} />
+          <BotHeaderStatus botKey="online" title="Онлайн серверов" state={botState} canControl={user.level === "full"} />
         </div>
       </PageHead>
 
-      {!botOnline && botState.enabled && (
-        <p className="notice warn">
-          {status ? "Бот онлайна не отвечает больше 3 минут: проверь контейнер online-bot." : "Бот онлайна ещё не запускался."}
-        </p>
-      )}
-      {problems > 0 && (
-        <p className="notice warn">
-          За сутки {formatNumber(problems)} предупреждений или ошибок.{" "}
-          <Link href="/online/events?level=problems" className="link">
-            Открыть историю
-          </Link>
-        </p>
-      )}
+      <SetupChecklist
+        items={[{ done: servers.length > 0, text: "Игровые серверы", hint: "бот показывает онлайн тех серверов, что добавлены здесь", href: "/online/servers", linkLabel: "Добавить" }]}
+        problems={problems}
+        historyHref="/online/events?level=problems"
+      />
 
       <div className="grid grid-4" style={{ marginBottom: 20 }}>
         <div className="metric"><div className="metric-label">Серверов онлайн</div><div className="metric-value">{online.length} / {servers.filter((s) => s.enabled).length}</div></div>

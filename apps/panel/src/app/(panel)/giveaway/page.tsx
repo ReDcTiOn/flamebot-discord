@@ -2,7 +2,8 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { formatInZone, formatNumber, getGiveawaySettings, plural, prisma } from "@flamebot/core";
 import { AutoRefresh } from "@/components/AutoRefresh";
-import { BotPower } from "@/components/BotPower";
+import { BotHeaderStatus } from "@/components/BotPower";
+import { SetupChecklist } from "@/components/SetupChecklist";
 import { EmptyState, PageHead, Section } from "@/components/Fields";
 import { requirePage } from "@/lib/auth";
 import { getBotStates } from "@/lib/botState";
@@ -13,9 +14,9 @@ export const metadata = { title: "Розыгрыши" };
 export default async function GiveawayOverview() {
   const user = await requirePage();
   const monthAgo = new Date(Date.now() - 30 * 86_400_000);
-  const [botState, status, settings, active, recent, endedCount, entries30d, delivered, undelivered, problems] = await Promise.all([
+  const [botState, token, settings, active, recent, endedCount, entries30d, delivered, undelivered, problems] = await Promise.all([
     getBotStates(["giveaway"]).then((s) => s.giveaway!),
-    prisma.botStatus.findUnique({ where: { botKey: "giveaway" } }),
+    prisma.botCredential.findUnique({ where: { botKey: "giveaway" }, select: { discordTokenEnc: true } }),
     getGiveawaySettings(prisma),
     prisma.giveaway.findMany({
       where: { status: "ACTIVE" },
@@ -41,30 +42,15 @@ export default async function GiveawayOverview() {
             <Plus size={15} aria-hidden="true" /> Новый розыгрыш
           </Link>
           <AutoRefresh seconds={10} />
-          <BotPower botKey="giveaway" title="Розыгрыши" state={botState} canControl={user.level === "full"} />
+          <BotHeaderStatus botKey="giveaway" title="Розыгрыши" state={botState} canControl={user.level === "full"} />
         </div>
       </PageHead>
 
-      {botState.enabled && botState.tone === "off" && (
-        <p className="notice warn">
-          {!status
-            ? "Бот розыгрышей ещё не запускался."
-            : status.state === "failed" && Date.now() - status.heartbeatAt.getTime() < 3 * 60_000
-              ? "Бот не может войти в Discord: проверь GIVEAWAY_DISCORD_TOKEN в .env. Пока он не работает, итоги не подводятся."
-              : "Бот розыгрышей не отвечает больше 3 минут: проверь контейнер giveaway-bot. Пока он не работает, итоги не подводятся."}{" "}
-          <Link href="/giveaway/events?level=problems" className="link">
-            История
-          </Link>
-        </p>
-      )}
-      {problems > 0 && (
-        <p className="notice warn">
-          За сутки {formatNumber(problems)} предупреждений или ошибок.{" "}
-          <Link href="/giveaway/events?level=problems" className="link">
-            Открыть историю
-          </Link>
-        </p>
-      )}
+      <SetupChecklist
+        items={[{ done: !!token?.discordTokenEnc, text: "Токен бота Discord", href: user.level === "full" ? "/giveaway/connection" : null, linkLabel: "Подключение", error: !token?.discordTokenEnc }]}
+        problems={problems}
+        historyHref="/giveaway/events?level=problems"
+      />
 
       <div className="grid grid-4" style={{ marginBottom: 20 }}>
         <div className="metric"><div className="metric-label">Идут сейчас</div><div className="metric-value">{formatNumber(active.length)}</div></div>

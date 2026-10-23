@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { formatNumber, getLinkSettings, prisma, steamProfileUrl } from "@flamebot/core";
 import { AutoRefresh } from "@/components/AutoRefresh";
-import { BotPower } from "@/components/BotPower";
+import { BotHeaderStatus } from "@/components/BotPower";
+import { SetupChecklist, type SetupItem } from "@/components/SetupChecklist";
 import { EmptyState, PageHead, Section } from "@/components/Fields";
 import { requirePage } from "@/lib/auth";
 import { getBotStates } from "@/lib/botState";
@@ -14,9 +15,9 @@ export default async function LinkOverview() {
   const full = user.level === "full";
   const now = new Date();
   const weekAgo = new Date(now.getTime() - 7 * 86_400_000);
-  const [botState, status, settings, total, week, left, pending, servers, recent, problems] = await Promise.all([
+  const [botState, token, settings, total, week, left, pending, servers, recent, problems] = await Promise.all([
     getBotStates(["link"]).then((s) => s.link!),
-    prisma.botStatus.findUnique({ where: { botKey: "link" } }),
+    prisma.botCredential.findUnique({ where: { botKey: "link" }, select: { discordTokenEnc: true } }),
     getLinkSettings(prisma),
     prisma.steamLink.count(),
     prisma.steamLink.count({ where: { linkedAt: { gte: weekAgo } } }),
@@ -31,49 +32,23 @@ export default async function LinkOverview() {
   const activeServers = servers.filter((s) => s.enabled).length;
 
   // Что ещё не настроено: без этого игроки не смогут привязаться.
-  const todo: { text: string; href: string | null }[] = [];
-  if (!status) todo.push({ text: "Бот ещё не запускался: задай токен в «Подключении» и запусти контейнер link-bot.", href: full ? "/link/connection" : null });
-  if (!settings.channelId) todo.push({ text: "Не выбран канал с кнопкой «Привязать».", href: "/link/settings" });
-  if (!settings.roleId) todo.push({ text: "Не выбрана роль за привязку: аккаунты свяжутся, но роль никто не получит.", href: "/link/settings" });
-  if (activeServers === 0) todo.push({ text: "Не подключён ни один игровой сервер: /connect в игре не заработает.", href: full ? "/link/servers" : null });
+  const setup: SetupItem[] = [
+    { done: !!token?.discordTokenEnc, text: "Токен бота Discord", href: full ? "/link/connection" : null, linkLabel: "Подключение", error: !token?.discordTokenEnc },
+    { done: !!settings.channelId, text: "Канал с кнопкой «Привязать»", href: "/link/settings", linkLabel: "Выбрать" },
+    { done: !!settings.roleId, text: "Роль за привязку", hint: "без неё аккаунты свяжутся, но роль никто не получит", href: "/link/settings", linkLabel: "Выбрать" },
+    { done: activeServers > 0, text: "Игровой сервер для /connect", href: full ? "/link/servers" : null, linkLabel: "Добавить" },
+  ];
 
   return (
     <>
       <PageHead title="Привязка Steam" hint="Игрок пишет /connect на любом сервере RUST, нажимает «Привязать» в Discord и вводит код. Связка общая для всех серверов.">
         <div className="head-actions">
           <AutoRefresh seconds={10} />
-          <BotPower botKey="link" title="Привязка Steam" state={botState} canControl={full} />
+          <BotHeaderStatus botKey="link" title="Привязка Steam" state={botState} canControl={full} />
         </div>
       </PageHead>
 
-      {botState.enabled && botState.tone === "off" && status && (
-        <p className="notice warn">
-          {status.state === "failed" && Date.now() - status.heartbeatAt.getTime() < 3 * 60_000
-            ? `Бот не может войти в Discord: ${status.loginError ?? "проверь токен в разделе «Подключение»"}. Пока он не работает, игроки не получают коды.`
-            : "Бот привязки не отвечает больше 3 минут: проверь контейнер link-bot. Пока он не работает, игроки не получают коды."}{" "}
-          <Link href="/link/events?level=problems" className="link">
-            История
-          </Link>
-        </p>
-      )}
-      {todo.map((t) => (
-        <p key={t.text} className="notice warn">
-          {t.text}{" "}
-          {t.href && (
-            <Link href={t.href} className="link">
-              Настроить
-            </Link>
-          )}
-        </p>
-      ))}
-      {problems > 0 && (
-        <p className="notice warn">
-          За сутки {formatNumber(problems)} предупреждений или ошибок.{" "}
-          <Link href="/link/events?level=problems" className="link">
-            Открыть историю
-          </Link>
-        </p>
-      )}
+      <SetupChecklist items={setup} problems={problems} historyHref="/link/events?level=problems" />
 
       <div className="grid grid-4" style={{ marginBottom: 20 }}>
         <div className="metric"><div className="metric-label">Привязано всего</div><div className="metric-value">{formatNumber(total)}</div></div>
