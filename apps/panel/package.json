@@ -11,8 +11,8 @@
   },
   "dependencies": {
     "@flamebot/core": "workspace:*",
-    "@napi-rs/canvas": "1.0.11",
-    "lucide-react": "1.59.0",
+    "@napi-rs/canvas": "1.0.13",
+    "lucide-react": "1.61.0",
     "next": "16.4.2",
     "react": "19.3.1",
     "react-dom": "19.3.1",
