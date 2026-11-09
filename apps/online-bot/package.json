@@ -12,8 +12,8 @@
   },
   "dependencies": {
     "@flamebot/core": "workspace:*",
-    "discord.js": "14.27.0",
-    "ws": "8.22.0",
+    "discord.js": "14.28.1",
+    "ws": "8.22.1",
     "zod": "4.6.7"
   },
   "devDependencies": {
