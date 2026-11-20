@@ -308,6 +308,8 @@ model OnlineServerStatus {
   alertState  OnlineState?
   // С какого момента сервер не работает — для «был выключен 15 мин».
   downSince   DateTime?
+  // Когда отправили «выключился». У серверов одного сводного сообщения время общее — так видно один рестарт.
+  downNotifiedAt DateTime?
   updatedAt   DateTime     @updatedAt
 }
 
@@ -323,6 +325,11 @@ model OnlineTelegram {
   delaySec        Int       @default(60)
   offlineText     String    @default("🔴 Сервер {server} выключился")
   onlineText      String    @default("🟢 Сервер {server} снова работает. Был выключен {downtime}")
+  // Сводные сообщения, когда серверов несколько: {count} — «4 сервера», {servers} — кто ещё не включился.
+  groupOfflineText String   @default("🔴 Выключились {count}")
+  groupOnlineText  String   @default("🟢 Снова работают {count}")
+  groupOnlineLine  String   @default("• {server} – {downtime} · {players}/{max}")
+  groupWaitingText String   @default("⏳ Пока выключены: {servers}")
   // Токен бота зашифрован открытым ключом бота онлайна: панель и база его прочитать не могут.
   tokenEnc        String?
   tokenHint       String?

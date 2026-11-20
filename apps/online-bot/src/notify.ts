@@ -2,17 +2,25 @@ import type { KeyObject } from "node:crypto";
 import {
   ONLINE_TELEGRAM_TOKEN_CONTEXT,
   formatDowntime,
-  onlineTelegramText,
+  onlineDownMessage,
+  onlineUpMessage,
   openSecret,
+  planOnlineAlerts,
   prisma,
+  serversCount,
+  type AlertMemory,
+  type AlertServer,
   type OnlineTelegram,
-  type Prisma,
 } from "@flamebot/core";
 import { Telegram, TelegramError, TelegramNetworkError } from "@flamebot/core/telegram";
 import { event, log } from "./events.js";
 import type { ServerWorker } from "./worker.js";
 
 const LOGIN_RETRY_MS = 60_000;
+// Очередь на чат: Telegram недоступен — сообщения ждут, но не больше 20 штук и не дольше 6 часов.
+const OUTBOX_LIMIT = 20;
+const OUTBOX_MAX_AGE_MS = 6 * 3_600_000;
+const NETWORK_RETRY_MS = 10_000;
 
 // Понятная причина, почему сообщение не дошло до чата.
 function chatError(err: unknown): string {
@@ -36,6 +44,11 @@ export class TelegramNotifier {
   private loginRetryAt = 0;
   // Номер подключения: старый цикл чтения сообщений останавливается, когда токен сменили.
   private generation = 0;
+  // Неотправленные сообщения по чатам и до какого времени чат просил подождать.
+  private readonly outbox = new Map<string, { text: string; what: string; at: number }[]>();
+  private readonly chatWaitUntil = new Map<string, number>();
+  // Когда серверы упали и поднялись — чтобы собрать один рестарт в одно сообщение.
+  private readonly memory: AlertMemory = { downAt: new Map(), upAt: new Map() };
 
   constructor(private readonly privateKey: KeyObject) {}
 
@@ -44,6 +57,7 @@ export class TelegramNotifier {
     await this.syncToken(cfg);
     if (cfg.testRequestedAt && (!cfg.testDoneAt || cfg.testDoneAt < cfg.testRequestedAt)) await this.sendTest(cfg);
     await this.checkServers(cfg, workers);
+    await this.flush(cfg);
   }
 
   // Бота остановили из панели: перестаём читать сообщения, уведомления не шлём.
@@ -51,6 +65,9 @@ export class TelegramNotifier {
     this.generation++;
     this.tg = null;
     this.tokenEnc = null;
+    // После включения устаревшие сообщения не досылаем.
+    this.outbox.clear();
+    this.chatWaitUntil.clear();
   }
 
   // ---------- Подключение ----------
@@ -167,59 +184,107 @@ export class TelegramNotifier {
     await prisma.onlineTelegram.update({ where: { id: 1 }, data: { testDoneAt: new Date(), testResult: result.slice(0, 1000), testOk: ok } });
   }
 
-  private async notify(cfg: OnlineTelegram, text: string, what: string): Promise<boolean> {
-    if (!this.tg || !cfg.chatIds.length) return true;
-    const r = await this.sendAll(cfg, text);
-    if (r.temporary) {
-      log("warn", `Telegram недоступен: ${what} — отправим позже`);
-      return false;
+  // ---------- Очередь сообщений ----------
+
+  // Ставит сообщение в очередь каждого чата. Отправка — в flush(), с учётом ограничений Telegram.
+  private enqueue(cfg: OnlineTelegram, text: string, what: string) {
+    if (!cfg.chatIds.length) return;
+    for (const chat of cfg.chatIds) {
+      const queue = this.outbox.get(chat) ?? [];
+      queue.push({ text, what, at: Date.now() });
+      // Чат долго недоступен: старое выбрасываем, чтобы очередь не росла бесконечно.
+      while (queue.length > OUTBOX_LIMIT) queue.shift();
+      this.outbox.set(chat, queue);
     }
-    if (r.errors.length) log("warn", `Telegram: ${what} — дошло не до всех. ${r.errors.join("; ")}`.slice(0, 900));
-    if (r.sent) event("telegram.sent", `Telegram: ${what} — отправлено в ${r.sent} из ${cfg.chatIds.length}`);
-    return true;
+  }
+
+  // По одному сообщению в чат за такт (раз в 3 с): Telegram пускает в группу около 20 сообщений в минуту.
+  // Если Telegram просит подождать, ждём ровно столько, сколько он сказал, и только этот чат.
+  private async flush(cfg: OnlineTelegram) {
+    if (!this.tg) return;
+    const now = Date.now();
+    for (const [chat, queue] of this.outbox) {
+      if (!cfg.chatIds.includes(chat)) {
+        this.outbox.delete(chat);
+        continue;
+      }
+      while (queue.length && now - queue[0]!.at > OUTBOX_MAX_AGE_MS) {
+        log("warn", `Telegram: ${queue.shift()!.what} — не удалось доставить в ${chat} за ${OUTBOX_MAX_AGE_MS / 3_600_000} ч, сообщение пропущено`);
+      }
+      const head = queue[0];
+      if (!head || (this.chatWaitUntil.get(chat) ?? 0) > now) continue;
+      try {
+        await this.tg.sendMessage(chat, head.text, null, false);
+        queue.shift();
+        event("telegram.sent", `Telegram: ${head.what} — отправлено в ${chat}`);
+      } catch (err) {
+        if (err instanceof TelegramError && err.code === 429) {
+          this.chatWaitUntil.set(chat, now + (err.retryAfter ?? 5) * 1000);
+        } else if (temporary(err)) {
+          this.chatWaitUntil.set(chat, now + NETWORK_RETRY_MS);
+        } else {
+          // Чат недоступен насовсем (бота удалили, нет прав): повторять бессмысленно.
+          queue.shift();
+          log("warn", `Telegram: ${head.what} — не дошло до ${chat}: ${chatError(err)}`);
+        }
+      }
+    }
   }
 
   // Сверяет, что видят воркеры, с тем, что уже сообщили в Telegram.
+  // Что и когда сообщать, решает planOnlineAlerts: упавшие вместе — одним сообщением,
+  // включения ждут остальных серверов того же рестарта.
   private async checkServers(cfg: OnlineTelegram, workers: ServerWorker[]) {
     if (!workers.length) return;
     const rows = await prisma.onlineServerStatus.findMany({
       where: { serverId: { in: workers.map((w) => w.id) } },
-      select: { serverId: true, alertState: true, downSince: true },
+      select: { serverId: true, alertState: true, downSince: true, downNotifiedAt: true },
     });
     const byId = new Map(rows.map((r) => [r.serverId, r]));
-    const now = Date.now();
-
+    const live = new Map<number, { worker: ServerWorker; snap: ReturnType<ServerWorker["snapshot"]> }>();
+    const servers: AlertServer[] = [];
     for (const w of workers) {
       const row = byId.get(w.id);
       if (!row) continue; // воркер ещё не записал статус
       const snap = w.snapshot();
-      let data: Prisma.OnlineServerStatusUpdateInput | null = null;
+      live.set(w.id, { worker: w, snap });
+      servers.push({
+        id: w.id,
+        online: snap.state === "ONLINE",
+        offlineSince: snap.offlineSince,
+        alertState: row.alertState,
+        downSince: row.downSince?.getTime() ?? null,
+        downNotifiedAt: row.downNotifiedAt?.getTime() ?? null,
+      });
+    }
 
-      if (snap.state === "ONLINE") {
-        if (row.alertState === "ONLINE") continue;
-        // «Снова работает» — только если до этого сообщали (или могли сообщить) о выключении.
-        if (row.alertState === "OFFLINE" && row.downSince && cfg.notifyOnline) {
-          const downtime = formatDowntime(now - row.downSince.getTime());
-          const text = onlineTelegramText(cfg.onlineText, { server: w.name, downtime, players: snap.players, max: snap.max });
-          if (!(await this.notify(cfg, text, `«${w.name}» снова работает`))) continue;
-        }
-        data = { alertState: "ONLINE", downSince: null };
-      } else {
-        if (row.alertState === "OFFLINE") continue;
-        // Короткий обрыв не тревога: ждём, вдруг сервер сейчас же поднимется.
-        if (now - snap.offlineSince < cfg.delaySec * 1000) continue;
-        if (row.alertState === "ONLINE") {
-          if (cfg.notifyOffline) {
-            const text = onlineTelegramText(cfg.offlineText, { server: w.name });
-            if (!(await this.notify(cfg, text, `«${w.name}» выключился`))) continue;
-          }
-          data = { alertState: "OFFLINE", downSince: new Date(snap.offlineSince) };
-        } else {
-          // Сервер ни разу не видели работающим (новый или бот только что запущен): молча запоминаем.
-          data = { alertState: "OFFLINE", downSince: null };
-        }
-      }
-      await prisma.onlineServerStatus.update({ where: { serverId: w.id }, data });
+    const now = Date.now();
+    const plan = planOnlineAlerts(servers, this.memory, now, cfg.delaySec * 1000);
+    const name = (id: number) => live.get(id)!.worker.name;
+
+    if (plan.down.length && cfg.notifyOffline) {
+      const names = plan.down.map(name);
+      this.enqueue(cfg, onlineDownMessage(cfg, names), names.length === 1 ? `«${names[0]}» выключился` : `выключились ${serversCount(names.length)}`);
+    }
+    if (plan.up.length && cfg.notifyOnline) {
+      const items = plan.up.map((id) => {
+        const { snap } = live.get(id)!;
+        const since = servers.find((s) => s.id === id)!.downSince!;
+        return { server: name(id), downtime: formatDowntime(now - since), players: snap.players, max: snap.max };
+      });
+      const what = items.length === 1 ? `«${items[0]!.server}» снова работает` : `снова работают ${serversCount(items.length)}`;
+      this.enqueue(cfg, onlineUpMessage(cfg, items, plan.waiting.map(name)), what);
+    }
+
+    for (const [serverId, u] of plan.updates) {
+      await prisma.onlineServerStatus.update({
+        where: { serverId },
+        data: {
+          alertState: u.alertState,
+          downSince: u.downSince === null ? null : new Date(u.downSince),
+          downNotifiedAt: u.downNotifiedAt === null ? null : new Date(u.downNotifiedAt),
+        },
+      });
     }
   }
 }

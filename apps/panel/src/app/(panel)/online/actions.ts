@@ -130,6 +130,10 @@ export async function saveOnlineTelegram(_prev: ActionResult, fd: FormData): Pro
       delaySec: int(fd, "delaySec"),
       offlineText: str(fd, "offlineText"),
       onlineText: str(fd, "onlineText"),
+      groupOfflineText: str(fd, "groupOfflineText"),
+      groupOnlineText: str(fd, "groupOnlineText"),
+      groupOnlineLine: str(fd, "groupOnlineLine"),
+      groupWaitingText: str(fd, "groupWaitingText"),
     });
     await prisma.onlineTelegram.upsert({ where: { id: 1 }, create: { id: 1, ...data }, update: data });
     await audit(user, MODULE, "online.telegram", null, data);

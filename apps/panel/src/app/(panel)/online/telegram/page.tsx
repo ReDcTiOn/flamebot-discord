@@ -47,7 +47,7 @@ export default async function OnlineTelegramPage() {
           </div>
         </Section>
 
-        <Section title="Уведомления" hint="Подстановки: {server} — название сервера; в сообщении о включении ещё {downtime} — сколько не работал, {players} и {max} — онлайн и слоты.">
+        <Section title="Уведомления" hint="Для одного сервера. Подстановки: {server} — название сервера; в сообщении о включении ещё {downtime} — сколько не работал, {players} и {max} — онлайн и слоты.">
           <div className="tiles group">
             <FieldRow icon="server" label="Сервер выключился">
               <Switch name="notifyOffline" defaultChecked={t.notifyOffline} label="Сообщать о выключении" />
@@ -63,6 +63,26 @@ export default async function OnlineTelegramPage() {
             </FieldRow>
             <FieldRow icon="clock" label="Ждать перед тревогой, секунд" hint="Сервер должен не отвечать столько времени подряд: короткий обрыв связи не повод писать">
               <NumberInput name="delaySec" defaultValue={t.delaySec} min={0} max={3600} label="Ждать перед тревогой" />
+            </FieldRow>
+          </div>
+        </Section>
+
+        <Section
+          title="Когда серверов несколько"
+          hint="Серверы, которые упали в пределах 15 секунд, приходят одним сообщением. «Снова работают» ждёт остальных из того же рестарта до 2 минут, кто не успел — в строке «пока выключены» и потом отдельным сообщением."
+        >
+          <div className="tiles group">
+            <FieldRow icon="message" label="Заголовок о выключении" hint="{count} — «4 сервера». Под ним список серверов">
+              <input type="text" name="groupOfflineText" defaultValue={t.groupOfflineText} maxLength={1000} required style={TEXT} />
+            </FieldRow>
+            <FieldRow icon="message" label="Заголовок о включении" hint="{count} — «4 сервера»">
+              <input type="text" name="groupOnlineText" defaultValue={t.groupOnlineText} maxLength={1000} required style={TEXT} />
+            </FieldRow>
+            <FieldRow icon="list" label="Строка сервера при включении" hint="{server}, {downtime}, {players}, {max}">
+              <input type="text" name="groupOnlineLine" defaultValue={t.groupOnlineLine} maxLength={1000} required style={TEXT} />
+            </FieldRow>
+            <FieldRow icon="clock" label="Кто ещё не включился" hint="{servers} — названия через запятую">
+              <input type="text" name="groupWaitingText" defaultValue={t.groupWaitingText} maxLength={1000} required style={TEXT} />
             </FieldRow>
           </div>
         </Section>
