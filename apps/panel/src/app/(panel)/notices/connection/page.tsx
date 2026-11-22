@@ -69,7 +69,7 @@ export default async function NoticeConnectionPage() {
       </ActionForm>
 
       {secrets.length > 0 && (
-        <Section title="Удалить ключ" hint="Например, чтобы отключить тестовые площадки.">
+        <Section title="Удалить ключ" hint="Удаление ключа flamerust.gg отключает создание новых скидок. Ранее созданные скидки останутся активны до истечения срока или ручной деактивации.">
           <div className="row-actions" style={{ flexWrap: "wrap" }}>
             {NOTICE_SECRETS.filter((m) => byName.has(m.name)).map((m) => (
               <ActionForm key={m.name} action={clearNoticeSecret} confirm={`Удалить «${m.label}»?`} confirmLabel="Удалить" danger>
@@ -83,7 +83,7 @@ export default async function NoticeConnectionPage() {
 
       <Section
         title="Проверка подключений"
-        hint="Бот проверит Telegram, вебхуки Discord (без сообщения), ключ ВКонтакте, ключи gamestores, картинки и расписание. Ничего не публикует."
+        hint="Бот проверит Telegram, вебхуки Discord (без сообщения), ключ ВКонтакте, ключи gamestores и flamerust.gg, картинки и расписание. Ничего не публикует."
         action={
           <NoticeButton kind="check" args={{}} variant="primary">
             Проверить

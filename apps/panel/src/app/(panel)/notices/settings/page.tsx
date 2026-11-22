@@ -73,7 +73,7 @@ export default async function NoticeSettingsPage() {
           </div>
         </Section>
 
-        <Section title="Промокод gamestores" hint="Создаётся при подтверждении текста, у которого указана скидка. Секретный ключ магазина — в «Подключении». Создание промокодов — непубличный метод: доступ выдаёт поддержка gamestores.">
+        <Section title="Промокод вайпа" hint="Создаётся при подтверждении текста, у которого указана скидка. Ключи магазинов задаются в «Подключении». При наличии ключа flamerust.gg тот же код создаётся там для скидки в процентах. Лимит активаций GameStores применяется только в GameStores. Создание промокодов — непубличный метод: доступ выдаёт поддержка gamestores.">
           <div className="tiles group">
             <FieldRow icon="store" label="ID магазина">
               <input type="text" name="gamestoresStoreId" defaultValue={s.gamestoresStoreId ?? ""} maxLength={64} style={W} />

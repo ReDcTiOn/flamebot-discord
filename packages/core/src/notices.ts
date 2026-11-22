@@ -41,6 +41,7 @@ export const NOTICE_SECRETS = [
   { name: "telegramToken", label: "Токен бота Telegram", placeholder: "123456789:AA… от @BotFather", required: true },
   { name: "discordWebhook", label: "Вебхук Discord", placeholder: "https://discord.com/api/webhooks/…", required: true },
   { name: "vkToken", label: "Ключ сообщества ВКонтакте", placeholder: "Управление → Работа с API → Ключи доступа (стена, фотографии)", required: true },
+  { name: "flamerustApiKey", label: "API-ключ flamerust.gg", placeholder: "Ключ внешнего API для скидочных промокодов", required: false },
   { name: "gamestoresSecretKey", label: "Секретный ключ gamestores", placeholder: "Из панели магазина gamestores.app", required: false },
   { name: "testDiscordWebhook", label: "Тестовый вебхук Discord", placeholder: "Для тестовых прогонов, необязательно", required: false },
   { name: "testVkToken", label: "Ключ тестового сообщества ВКонтакте", placeholder: "Для тестовых прогонов, необязательно", required: false },
@@ -64,6 +65,8 @@ export function noticeSecretProblem(name: NoticeSecretName, value: string): stri
     case "vkToken":
     case "testVkToken":
       return /^[\w.-]{40,}$/.test(v) ? null : "Это не похоже на ключ доступа ВКонтакте";
+    case "flamerustApiKey":
+      return /^[!-~]{8,}$/.test(v) ? null : "Введите API-ключ без пробелов";
     default:
       return v.length >= 8 ? null : "Слишком короткое значение";
   }

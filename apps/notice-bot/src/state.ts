@@ -38,6 +38,7 @@ export interface NoticeContext {
   live: Targets;
   test: Targets;
   gamestores: GameStores | null;
+  flamerustApiKey: string | null;
   // Чего не хватает для работы: показывается в панели и при запуске.
   missing: string[];
   signature: string;
@@ -130,6 +131,7 @@ export async function loadContext(key: BotKey): Promise<NoticeContext> {
       vkPhotos: photos(settings.testVkPhotoRegular, settings.testVkPhotoGlobal),
     },
     gamestores: s.gamestoresSecretKey && settings.gamestoresStoreId ? { storeId: settings.gamestoresStoreId, secretKey: s.gamestoresSecretKey } : null,
+    flamerustApiKey: s.flamerustApiKey ?? null,
     missing,
     signature,
   };

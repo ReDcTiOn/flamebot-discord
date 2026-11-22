@@ -3,6 +3,7 @@ import {
   buildPromoSpec,
   defaultTemplateId,
   noticeWipesBetween,
+  zonedToDate,
   prisma,
   renderNotice,
   type NoticeEvent,
@@ -13,6 +14,7 @@ import {
 } from "@flamebot/core";
 import { TelegramError, TelegramNetworkError, type InlineKeyboard } from "@flamebot/core/telegram";
 import { SendError, sendDiscord } from "./clients/discord.js";
+import { createFlamePromo, deleteFlamePromo, findFlamePromo } from "./clients/flamerust.js";
 import { PromoError, createPromo, deletePromos, findActive, listPromos, type StorePromo } from "./clients/gamestores.js";
 import { sendVk } from "./clients/vk.js";
 import { config } from "./config.js";
@@ -43,6 +45,11 @@ const minutes = (n: number) => n * 60_000;
 const msgsOf = (ev: NoticeEvent) => (Array.isArray(ev.msgs) ? (ev.msgs as Msgs) : []);
 const resultsOf = (ev: NoticeEvent) => (ev.results ?? {}) as msg.Results;
 const promoOf = (ev: NoticeEvent) => (ev.promo ?? null) as StoredPromo | null;
+const flamePromoOf = (ev: NoticeEvent) => ev.flamePromo as { id: string | null; code: string; amount: number; startsAt: string; endsAt: string } | null;
+function flameEndsAt(spec: PromoSpec, timezone: string): Date {
+  const [year, month, day, hour, minute] = spec.dateEnd.split(/[- :]/).map(Number);
+  return zonedToDate({ year: year!, month: month!, day: day! }, { hour: hour!, minute: minute! }, timezone);
+}
 const panelLink = (key?: string) => (config.PANEL_URL ? `${config.PANEL_URL}/notices${key ? `/wipes/${encodeURIComponent(key)}` : ""}` : null);
 
 // ====================================================================== Telegram
@@ -139,10 +146,15 @@ export class NoticeService {
 
   private promoLine(ev: NoticeEvent): msg.PromoLine | null {
     const spec = this.promoSpec(ev);
-    const existing = promoOf(ev);
+    const gsPromo = promoOf(ev);
+    const flame = flamePromoOf(ev);
+    const existing = gsPromo ?? (flame && { code: flame.code, amount: flame.amount, date_end: spec?.dateEnd ?? "" });
     if (!spec) return existing ? { code: existing.code, amount: existing.amount, dateEnd: existing.date_end, state: "remove" } : null;
     if (!existing) return { code: spec.code, amount: spec.amount, dateEnd: spec.dateEnd, state: "pending" };
-    const same = existing.code === spec.code && existing.amount === spec.amount && existing.date_end === spec.dateEnd;
+    const flameReady = !ctx().flamerustApiKey || ctx().settings.dryRun || ev.isTest || spec.type !== "discount"
+      || (flame?.code === spec.code && flame.amount === spec.amount && flame.endsAt === flameEndsAt(spec, ctx().settings.timezone).toISOString());
+    if (!flameReady && !flame) return { code: spec.code, amount: spec.amount, dateEnd: spec.dateEnd, state: "pending" };
+    const same = flameReady && existing.code === spec.code && existing.amount === spec.amount && existing.date_end === spec.dateEnd;
     return { code: spec.code, amount: spec.amount, dateEnd: spec.dateEnd, state: same ? "created" : "replace" };
   }
 
@@ -276,7 +288,14 @@ export class NoticeService {
     return serial(async () => {
       const ev = await this.pending(key);
       if (!ev) return { ok: false, text: msg.STALE };
-      const outcome = await this.ensurePromo(ev);
+      const stores = await this.ensurePromo(ev);
+      const flame = await this.ensureFlamePromo(ev);
+      const outcome = flame.state === "none" ? stores : stores.state === "none" ? flame : {
+        ...stores,
+        state: stores.state === "error" || flame.state === "error" ? "error" as const
+          : stores.state === "warn" || flame.state === "warn" ? "warn" as const : stores.state,
+        text: `GameStores: ${stores.text} · flamerust.gg: ${flame.text}`,
+      };
       if (outcome.state === "error") {
         // Подтверждение не принимаем: текст ссылается на промокод, которого нет. Повторное нажатие повторит попытку.
         await this.refreshCards(ev, msg.hPromoFailed(outcome));
@@ -313,19 +332,26 @@ export class NoticeService {
 
   skip(key: string, by: string): Promise<Outcome> {
     return serial(async () => {
-      const ev = await this.pending(key);
+      const ev = await prisma.noticeEvent.findUnique({ where: { key } });
       if (!ev) return { ok: false, text: msg.STALE };
+      if (ev.status === "skipped" && flamePromoOf(ev)) {
+        const outcome = await this.dropFlamePromo(ev);
+        return { ok: outcome.state === "ok", text: `flamerust.gg: ${outcome.text}` };
+      }
+      if (ev.status !== "pending") return { ok: false, text: msg.STALE };
       await prisma.noticeEvent.update({ where: { key }, data: { status: "skipped" } });
+      const flame = await this.dropFlamePromo(ev);
       await clearMsgs(msgsOf(ev));
       // Промокод, созданный под этот вайп, больше не нужен.
       const released = promoOf(ev) ? await this.dropPromo(ev, "вайп отменён") : null;
       let note = "";
       if (released?.state === "ok") note = `🎟 Промокод <code>${msg.e(released.code)}</code> удалён.`;
       else if (released) note = `⚠️ Промокод <code>${msg.e(released.code)}</code>: ${msg.e(msg.clip(released.text, 300))}`;
+      if (flame.state !== "none") note += `\n🎟 flamerust.gg: ${msg.e(flame.text)}`;
       const text = msg.skipped(ev, zone(), note, by);
       for (const [chat, id] of msgsOf(ev)) await editText(chat, id, text, null).catch(() => undefined);
       if (!ev.isTest) event("wipe.skipped", `Вайп ${key}: ${by} отменил отправку${released ? `, промокод: ${released.text}` : ""}`, { level: "WARN" });
-      return { ok: true, text: `Отправка отменена.${released ? ` Промокод: ${released.text}` : ""}` };
+      return { ok: true, text: `Отправка отменена.${released ? ` Промокод: ${released.text}` : ""}${flame.state !== "none" ? ` flamerust.gg: ${flame.text}.` : ""}` };
     });
   }
 
@@ -371,16 +397,20 @@ export class NoticeService {
     const promo = await this.ensurePromo(ev);
     if (promo.state !== "none") results.promo = promo;
 
-    const names = (["discord", "vk"] as const).filter((n) => !["ok", "dry"].includes(results[n]?.state ?? ""));
+    const flame = await this.ensureFlamePromo(ev);
+    if (flame.state !== "none") results.flamePromo = flame;
+    else delete results.flamePromo;
+
+    const names = (["discord", "vk"] as const).filter((n) => flame.state !== "error" && !["ok", "dry"].includes(results[n]?.state ?? ""));
     const outcomes = await Promise.all(names.map((n) => this.sendOne(n, ev!, tpl)));
     names.forEach((n, i) => (results[n] = outcomes[i]));
 
-    const failed = results.discord?.state === "error" || results.vk?.state === "error";
+    const failed = flame.state === "error" || results.discord?.state === "error" || results.vk?.state === "error";
     ev = await prisma.noticeEvent.update({ where: { key }, data: { results: results as Prisma.InputJsonValue, status: failed ? "partial" : "sent" } });
     const sent = await broadcast(msg.resultText(ev, tpl, zone()), failed ? msg.retryKb(ev) : null);
     if (failed) await prisma.noticeEvent.update({ where: { key }, data: { msgs: sent } });
 
-    const summary = (["discord", "vk"] as const).map((n) => `${n === "vk" ? "ВКонтакте" : "Discord"}: ${results[n]?.state === "ok" ? "отправлено" : results[n]?.state === "dry" ? "пробный прогон" : `ошибка — ${results[n]?.detail ?? "?"}`}`).join("; ");
+    const summary = flame.state === "error" ? `flamerust.gg: ${flame.text}` : (["discord", "vk"] as const).map((n) => `${n === "vk" ? "ВКонтакте" : "Discord"}: ${results[n]?.state === "ok" ? "отправлено" : results[n]?.state === "dry" ? "пробный прогон" : `ошибка — ${results[n]?.detail ?? "?"}`}`).join("; ");
     if (!ev.isTest) {
       event(failed ? "send.partial" : "send.done", `Вайп ${key}: ${failed ? "отправлено не везде" : "объявление опубликовано"}. ${summary}`.slice(0, 1000), {
         level: failed ? "ERROR" : "INFO",
@@ -431,6 +461,7 @@ export class NoticeService {
     const out = (state: msg.PromoOutcome["state"], text: string): msg.PromoOutcome => ({ state, text, code: spec!.code, amount: spec!.amount, dateEnd: spec!.dateEnd });
 
     if (!real) return out("dry", "пробный прогон, ничего не создано");
+    if (!gs && !existing && spec.type === "discount" && ctx().flamerustApiKey && !s.gamestoresStoreId) return { state: "none", text: "" };
     if (!gs) return out("error", "не заданы ID магазина и секретный ключ gamestores");
 
     let replaced = "";
@@ -486,6 +517,71 @@ export class NoticeService {
     await prisma.noticeEvent.update({ where: { key: ev.key }, data: { promo: Prisma.DbNull } });
     if (!ev.isTest) event("promo.deleted", `Промокод ${label} удалён: ${reason} (вайп ${ev.key})`);
     return out("ok", `удалён — ${reason}`);
+  }
+
+  private async ensureFlamePromo(ev: NoticeEvent): Promise<msg.PromoOutcome> {
+    const { flamerustApiKey: key, settings: s } = ctx();
+    const existing = flamePromoOf(ev);
+    const spec = this.promoSpec(ev);
+    if (!spec || spec.type !== "discount") return this.dropFlamePromo(ev);
+    if (!key && !existing) return { state: "none", text: "" };
+    const out = (state: msg.PromoOutcome["state"], text: string): msg.PromoOutcome =>
+      ({ state, text, code: spec.code, amount: spec.amount, dateEnd: spec.dateEnd });
+    if (s.dryRun || ev.isTest) return out("dry", "пробный прогон, скидка не создана");
+    if (!key) return out("error", "восстановите API-ключ для управления скидкой этого вайпа");
+
+    const endsAt = flameEndsAt(spec, s.timezone);
+    const startsAt = this.now();
+    if (endsAt <= startsAt) return out("error", "срок действия скидки уже истёк");
+    if (existing?.code === spec.code && existing.amount === spec.amount && existing.endsAt === endsAt.toISOString()) {
+      return out("ok", "уже создан");
+    }
+    if (existing) {
+      const dropped = await this.dropFlamePromo(ev);
+      if (dropped.state !== "ok") return dropped;
+    }
+
+    try {
+      if (await findFlamePromo(key, spec.code)) return out("error", `код ${spec.code} уже занят. Проверьте скидку в магазине или выберите другой код`);
+      const id = await createFlamePromo(key, {
+        code: spec.code,
+        starts_at: startsAt.toISOString(),
+        ends_at: endsAt.toISOString(),
+        discount_percent: spec.amount,
+      });
+      await prisma.noticeEvent.update({
+        where: { key: ev.key },
+        data: { flamePromo: { id, code: spec.code, amount: spec.amount, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString() } },
+      });
+      event("promo.created", `Скидка flamerust.gg создана для вайпа ${ev.key}`);
+      return out("ok", id ? "создан" : "создан, API не вернул UUID для автоматической деактивации");
+    } catch (err) {
+      return out("error", errorText(err));
+    }
+  }
+
+  private async dropFlamePromo(ev: NoticeEvent): Promise<msg.PromoOutcome> {
+    const existing = flamePromoOf(ev);
+    if (!existing) return { state: "none", text: "" };
+    const { flamerustApiKey: key, settings: s } = ctx();
+    const out = (state: msg.PromoOutcome["state"], text: string): msg.PromoOutcome =>
+      ({ state, text, code: existing.code, amount: existing.amount });
+    if (s.dryRun || ev.isTest) return out("dry", "пробный прогон, скидка не деактивирована");
+    try {
+      if (Date.parse(existing.endsAt) > this.now().getTime()) {
+        if (!key) return out("error", "восстановите API-ключ для деактивации скидки");
+        if (!existing.id) {
+          if (await findFlamePromo(key, existing.code)) return out("error", "деактивируйте скидку в магазине вручную: API не вернул UUID");
+        } else {
+          await deleteFlamePromo(key, existing.id);
+        }
+      }
+      await prisma.noticeEvent.update({ where: { key: ev.key }, data: { flamePromo: Prisma.DbNull } });
+      event("promo.deleted", `Скидка flamerust.gg снята для вайпа ${ev.key}`);
+      return out("ok", "скидка деактивирована или срок её действия истёк");
+    } catch (err) {
+      return out("error", errorText(err));
+    }
   }
 
   async promos(): Promise<StorePromo[] | null> {

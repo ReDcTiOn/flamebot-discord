@@ -49,6 +49,7 @@ export default async function NoticeWipePage({ params }: { params: Promise<{ key
   const rendered = tpl ? renderNotice(tpl, ev.wipeAt, s.timezone) : null;
   const results = (ev.results ?? {}) as Record<string, Result | undefined>;
   const promo = ev.promo as { code: string; amount: number; date_end: string; id: number | null } | null;
+  const flame = ev.flamePromo as { id: string | null; code: string; amount: number; endsAt: string } | null;
   const spec = tpl?.promoAmount ? buildPromoSpec(s, tpl.promoAmount, ev.wipeAt) : null;
   const pending = ev.status === "pending";
   const by = ev.confirmedBy?.replace(/ \(панель\)$/, "");
@@ -79,7 +80,7 @@ export default async function NoticeWipePage({ params }: { params: Promise<{ key
         </div>
         <div className="setting">
           <div className="setting-body">
-            <div className="setting-title">Промокод</div>
+            <div className="setting-title">Промокод вайпа</div>
             <div className="setting-hint">
               {promo
                 ? `${promo.code} · ${promo.amount}% · до ${fmtPromoEnd(promo.date_end)} — ${promo.id ? "создан ботом" : "уже был в магазине"}`
@@ -95,6 +96,20 @@ export default async function NoticeWipePage({ params }: { params: Promise<{ key
             </div>
           </div>
         </div>
+        {flame && (
+          <div className="setting">
+            <div className="setting-body">
+              <div className="setting-title">Скидка flamerust.gg</div>
+              <div className="setting-hint">
+                {flame.code} · {flame.amount}% · до {fmt(new Date(flame.endsAt))}
+                {!flame.id && " · деактивация через магазин"}
+              </div>
+            </div>
+            {ev.status === "skipped" && (
+              <NoticeButton kind="event.skip" args={{ key: ev.key }} variant="secondary">Повторить деактивацию</NoticeButton>
+            )}
+          </div>
+        )}
       </div>
 
       {pending && (
@@ -135,14 +150,14 @@ export default async function NoticeWipePage({ params }: { params: Promise<{ key
           action={ev.status === "partial" ? <NoticeButton kind="event.retry" args={{ key: ev.key }} variant="primary" confirm="Повторить неудавшиеся площадки?" confirmMessage="Удавшиеся не продублируются. Если ВКонтакте не ответил на публикацию, сначала проверь стену: пост мог уйти.">Повторить неудавшиеся</NoticeButton> : null}
         >
           <div className="tiles">
-            {(["discord", "vk", "promo"] as const).map((n) => {
+            {(["discord", "vk", "promo", "flamePromo"] as const).map((n) => {
               const r = results[n];
               if (!r) return null;
               const detail = r.detail ?? r.text ?? "";
               return (
                 <div key={n} className="setting">
                   <div className="setting-body">
-                    <div className="setting-title">{n === "vk" ? "ВКонтакте" : n === "promo" ? `Промокод${r.code ? ` ${r.code} · ${r.amount}%` : ""}` : "Discord"}</div>
+                    <div className="setting-title">{n === "vk" ? "ВКонтакте" : (n === "promo" || n === "flamePromo") ? `Промокод ${n === "promo" ? "GameStores" : "flamerust.gg"}${r.code ? ` ${r.code} · ${r.amount}%` : ""}` : "Discord"}</div>
                     <div className="setting-hint">
                       {n === "vk" && detail.startsWith("https://") ? (
                         <a href={detail} className="link" target="_blank" rel="noreferrer noopener">

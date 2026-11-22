@@ -712,6 +712,8 @@ model NoticeEvent {
   msgs        Json     @default("[]")
   // Созданный ботом промокод: {"id", "code", "amount", "date_end"}.
   promo       Json?
+  // Скидка flamerust.gg, созданная для этого вайпа.
+  flamePromo  Json?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

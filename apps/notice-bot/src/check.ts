@@ -1,5 +1,6 @@
 import { noticeRuleProblems } from "@flamebot/core";
 import { checkWebhook } from "./clients/discord.js";
+import { findFlamePromo } from "./clients/flamerust.js";
 import { listPromos } from "./clients/gamestores.js";
 import { checkVk } from "./clients/vk.js";
 import { errorText } from "./events.js";
@@ -46,6 +47,11 @@ export async function runCheck(): Promise<CheckRow[]> {
       : { name: "ВКонтакте", ok: false, text: "ключ или ID сообщества не заданы" },
   );
   rows.push(c.gamestores ? await probe("gamestores", async () => `ключи работают, активных промокодов: ${(await listPromos(c.gamestores!)).length}`) : { name: "gamestores", ok: false, text: "ID магазина или секретный ключ не заданы" });
+
+  rows.push(c.flamerustApiKey ? await probe("flamerust.gg", async () => {
+    await findFlamePromo(c.flamerustApiKey!, c.settings.promoCode);
+    return "API доступен, список промокодов получен";
+  }) : { name: "flamerust.gg", ok: null, text: "API-ключ не задан" });
 
   if (c.test.discord) rows.push(await probe("Discord (тест)", async () => `вебхук «${await checkWebhook(c.test.discord!)}»`));
   if (c.test.vkToken && c.test.vkGroupId) rows.push(await probe("ВКонтакте (тест)", async () => `сообщество «${await checkVk(c.test.vkToken!, c.test.vkGroupId!)}»`));

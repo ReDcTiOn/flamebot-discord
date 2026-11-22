@@ -187,9 +187,9 @@ function resultRow(label: string, res: SendResult, isVk: boolean): string[] {
   return [`❌ <b>${label}</b> — ошибка`, quote(e(clip(detail || "причина неизвестна", 500)))];
 }
 
-function promoResultRow(res: PromoOutcome): string[] {
+function promoResultRow(res: PromoOutcome, label = "Промокод GameStores"): string[] {
   const icon = { ok: "✅", dry: "🧪", warn: "⚠️", error: "❌", none: "❔" }[res.state];
-  const head = `${icon} <b>Промокод</b>${res.code ? ` ${promoTag(res.code, res.amount, res.dateEnd)}` : ""}`;
+  const head = `${icon} <b>${label}</b>${res.code ? ` ${promoTag(res.code, res.amount, res.dateEnd)}` : ""}`;
   const detail = e(clip(res.text ?? "", 400));
   if (res.state === "error") return [`${head} — не создан`, quote(detail)];
   return [detail ? `${head} — ${detail}` : head];
@@ -199,17 +199,20 @@ export interface Results {
   discord?: SendResult;
   vk?: SendResult;
   promo?: PromoOutcome;
+  flamePromo?: PromoOutcome;
 }
 
 export function resultText(ev: NoticeEvent, tpl: NoticeTemplate, z: Zone): string {
   const r = (ev.results ?? {}) as Results;
   const states = new Set([r.discord?.state, r.vk?.state].filter(Boolean));
-  const title = states.has("error") ? "⚠️ <b>Отправлено не везде</b>" : states.size === 1 && states.has("dry") ? "🧪 <b>Пробный прогон завершён</b>" : "📤 <b>Вайп опубликован</b>";
+  const promoFailed = r.flamePromo?.state === "error";
+  const title = promoFailed ? "⚠️ <b>Скидка flamerust.gg не готова</b>" : states.has("error") ? "⚠️ <b>Отправлено не везде</b>" : states.size === 1 && states.has("dry") ? "🧪 <b>Пробный прогон завершён</b>" : "📤 <b>Вайп опубликован</b>";
   const missing: SendResult = { state: "error", detail: "не отправлялось" };
   const lines = [title + testBadge(ev.isTest), SEP, kindLine(tpl.kind as NoticeKind), ...whenLines(ev.wipeAt, z), `📝 <i>${e(tpl.title)}</i>`, ""];
   lines.push(...resultRow("Discord", r.discord ?? missing, false), ...resultRow("ВКонтакте", r.vk ?? missing, true));
   if (r.promo) lines.push(...promoResultRow(r.promo));
-  if (states.has("error")) lines.push("", "<i>Кнопка ниже повторит только неудавшиеся площадки; удавшиеся не продублируются.</i>");
+  if (r.flamePromo) lines.push(...promoResultRow(r.flamePromo, "Промокод flamerust.gg"));
+  if (promoFailed || states.has("error")) lines.push("", "<i>Кнопка ниже повторит только неудавшиеся площадки; удавшиеся не продублируются.</i>");
   return lines.join("\n");
 }
 
