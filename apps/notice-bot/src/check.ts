@@ -50,7 +50,7 @@ export async function runCheck(): Promise<CheckRow[]> {
 
   rows.push(c.flamerustApiKey ? await probe("flamerust.gg", async () => {
     await findFlamePromo(c.flamerustApiKey!, c.settings.promoCode);
-    return "API доступен, список промокодов получен";
+    return "API доступен, проверка промокода прошла";
   }) : { name: "flamerust.gg", ok: null, text: "API-ключ не задан" });
 
   if (c.test.discord) rows.push(await probe("Discord (тест)", async () => `вебхук «${await checkWebhook(c.test.discord!)}»`));

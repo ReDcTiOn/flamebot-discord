@@ -1,4 +1,4 @@
-const BASE = "https://flamerust.gg/api/v1/external/promo-codes";
+const BASE = "https://api.flamerust.gg/api/v1/external/promo-codes";
 const UUID = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 let retryAt = 0;
 
@@ -42,22 +42,18 @@ function record(value: unknown): Record<string, unknown> | undefined {
 }
 
 export async function findFlamePromo(key: string, code: string): Promise<boolean> {
-  const response = await request(key, "GET", `?${new URLSearchParams({ code })}`);
-  const body: unknown = await response.json().catch(() => null);
-  const root = record(body);
-  const data = record(root?.data);
-  const list = [body, root?.data, root?.items, root?.promo_codes, data?.items, data?.promo_codes].find(Array.isArray);
-  if (!list || list.some((item: unknown) => typeof record(item)?.code !== "string")) {
-    throw new Error("неизвестный формат списка промокодов flamerust.gg");
+  const response = await request(key, "GET", `/check?${new URLSearchParams({ code })}`);
+  const body = record(await response.json().catch(() => null));
+  if (typeof body?.exists !== "boolean") {
+    throw new Error("неизвестный формат проверки промокода flamerust.gg");
   }
-  return list.some((item: { code: string }) => item.code.toLowerCase() === code.toLowerCase());
+  return body.exists;
 }
 
 export async function createFlamePromo(key: string, body: { code: string; starts_at: string; ends_at: string; discount_percent: number }): Promise<string | null> {
   const response = await request(key, "POST", "/discount", body);
-  const root = record(await response.json().catch(() => null));
-  const data = record(root?.data);
-  const id = root?.id ?? data?.id ?? record(root?.promo_code)?.id ?? record(data?.promo_code)?.id;
+  const result = record(await response.json().catch(() => null));
+  const id = record(result?.promo)?.id;
   return typeof id === "string" && UUID.test(id) ? id : null;
 }
 
