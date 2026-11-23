@@ -12,8 +12,8 @@
   },
   "dependencies": {
     "@flamebot/core": "workspace:*",
-    "@napi-rs/canvas": "1.0.11",
-    "discord.js": "14.27.0",
+    "@napi-rs/canvas": "1.1.1",
+    "discord.js": "14.28.1",
     "zod": "4.6.7"
   },
   "devDependencies": {
