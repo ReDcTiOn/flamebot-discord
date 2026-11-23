@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { GIVEAWAY_MAX_WINNERS, addDays, getGiveawaySettings, prisma, today, type CalendarDate } from "@flamebot/core";
+import { GIVEAWAY_MAX_WINNERS, GIVEAWAY_REPEAT_OPTIONS, addDays, getGiveawaySettings, prisma, today, type CalendarDate } from "@flamebot/core";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { EmptyState, FieldRow, NumberInput, PageHead, Section, Switch } from "@/components/Fields";
 import { requirePage } from "@/lib/auth";
 import { getBotStates } from "@/lib/botState";
 import { createGiveaway } from "../actions";
+import { PromoFields, ScheduleFields } from "./PublicationFields";
 
 export const metadata = { title: "Новый розыгрыш" };
 
@@ -37,7 +38,7 @@ export default async function NewGiveawayPage() {
     <>
       <PageHead
         title="Новый розыгрыш"
-        hint={`После создания бот отправит розыгрыш с кнопкой «Участвовать» в выбранный канал в течение 10 секунд. Время — ${s.timezoneLabel}.`}
+        hint={`Выбери канал и опубликуй розыгрыш сразу или по расписанию. Время по поясу «${s.timezoneLabel}».`}
       />
 
       {botState.tone !== "on" && (
@@ -79,17 +80,13 @@ export default async function NewGiveawayPage() {
                   ))}
                 </select>
               </FieldRow>
-              <FieldRow icon="clock" label="Дата итогов">
-                <input type="date" name="date" defaultValue={isoDate(defaultDate)} min={isoDate(now)} required aria-label="Дата итогов" />
-              </FieldRow>
-              <FieldRow icon="clock" label="Время итогов" hint={`По поясу «${s.timezoneLabel}»`}>
-                <input type="time" name="time" defaultValue={s.quickTime} required aria-label="Время итогов" />
-              </FieldRow>
               <FieldRow icon="ticket" label="Только для бустеров" hint="Участвовать смогут только те, кто бустит сервер">
                 <Switch name="boostersOnly" defaultChecked={s.quickBoostersOnly} label="Только для бустеров" />
               </FieldRow>
             </div>
           </Section>
+
+          <ScheduleFields today={isoDate(now)} defaultDate={isoDate(defaultDate)} defaultTime={s.quickTime} timezone={s.timezoneLabel} repeatOptions={GIVEAWAY_REPEAT_OPTIONS} defaultRepeat={s.defaultRepeatEveryDays} />
 
           <Section title="Описание" hint="Необязательно: условия или подробности. Показывается в сообщении розыгрыша.">
             <div className="setting" style={{ flexDirection: "column", alignItems: "stretch" }}>
@@ -97,24 +94,7 @@ export default async function NewGiveawayPage() {
             </div>
           </Section>
 
-          <Section
-            title="Промокоды"
-            hint="Необязательно. По одному в строке, ровно столько, сколько победителей: каждый победитель получит свой промокод в ЛС. Пустое поле — розыгрыш без промокодов."
-          >
-            <div className="setting" style={{ flexDirection: "column", alignItems: "stretch" }}>
-              <textarea
-                name="codes"
-                maxLength={4000}
-                rows={6}
-                className="wide"
-                aria-label="Промокоды"
-                placeholder={"PROMO-AAAAAAAAAA\nPROMO-BBBBBBBBBB"}
-                spellCheck={false}
-                autoComplete="off"
-                style={{ fontFamily: "var(--mono)" }}
-              />
-            </div>
-          </Section>
+          <PromoFields />
 
           <div className="save-bar" style={{ gap: 8 }}>
             <Link href="/giveaway" className="btn">

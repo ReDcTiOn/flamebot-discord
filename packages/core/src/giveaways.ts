@@ -7,6 +7,29 @@ import type { Db } from "./db.js";
 
 export const GIVEAWAY_FLAMERUST_KEY_CONTEXT = "bot:giveaway:flamerustApiKey";
 
+export const GIVEAWAY_REPEAT_OPTIONS = [
+  { days: 0, label: "Один раз" },
+  { days: 1, label: "Каждый день" },
+  { days: 7, label: "Каждую неделю" },
+  { days: 14, label: "Раз в две недели" },
+  { days: 28, label: "Раз в четыре недели" },
+] as const;
+
+export function nextGiveawayStart(startsAt: Date, everyDays: number, timeZone: string, now: Date): Date {
+  if (!Number.isSafeInteger(everyDays) || everyDays < 1) throw new RangeError("Интервал повторения должен быть положительным числом дней");
+  const clock = zonedParts(startsAt, timeZone);
+  const current = zonedParts(now, timeZone);
+  const day = (d: CalendarDate) => Date.UTC(d.year, d.month - 1, d.day) / 86_400_000;
+  let step = Math.max(1, Math.floor((day(current) - day(clock)) / everyDays));
+  for (;;) {
+    const date = addDays(clock, step * everyDays);
+    const next = zonedToDate(date, clock, timeZone);
+    const actual = zonedParts(next, timeZone);
+    if (next > now && actual.hour === clock.hour && actual.minute === clock.minute) return next;
+    step++;
+  }
+}
+
 export const GIVEAWAY_MAX_WINNERS = 20;
 export const GIVEAWAY_MAX_DAYS = 365;
 
@@ -213,6 +236,7 @@ export const giveawaySettingsSchema = z.object({
       return formatTime(t);
     }),
   quickBoostersOnly: z.boolean(),
+  defaultRepeatEveryDays: z.number().refine(n => GIVEAWAY_REPEAT_OPTIONS.some(option => option.days === n), "Выбери частоту повторения из списка").default(0),
 });
 
 export async function getGiveawaySettings(db: Db): Promise<GiveawaySettings> {

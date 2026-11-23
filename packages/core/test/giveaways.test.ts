@@ -4,6 +4,7 @@ import {
   addDays,
   formatInZone,
   giveawaySettingsSchema,
+  nextGiveawayStart,
   parseCodes,
   parseDate,
   parseTime,
@@ -105,5 +106,20 @@ describe("розыгрыши: тексты и настройки", () => {
     assert.equal(giveawaySettingsSchema.safeParse({ ...base, timezone: "Mars/Olympus" }).success, false);
     assert.equal(giveawaySettingsSchema.safeParse({ ...base, promoDmText: "Без кода" }).success, false);
     assert.equal(giveawaySettingsSchema.safeParse({ ...base, quickTime: "25:00" }).success, false);
+  });
+});
+
+
+describe("повторение розыгрышей", () => {
+  it("сохраняет местное время после смены смещения UTC", () => {
+    const first = new Date("2026-03-22T18:00:00Z"); // воскресенье, 19:00 в Берлине
+    const next = nextGiveawayStart(first, 7, "Europe/Berlin", first);
+    assert.equal(next.toISOString(), "2026-03-29T17:00:00.000Z");
+  });
+
+  it("пропускает старты, пропущенные в простое", () => {
+    const first = new Date("2026-11-23T10:00:00Z");
+    const next = nextGiveawayStart(first, 7, "Asia/Vladivostok", new Date("2026-12-09T00:00:00Z"));
+    assert.equal(next.toISOString(), "2026-12-14T10:00:00.000Z");
   });
 });

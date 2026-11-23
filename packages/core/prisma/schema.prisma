@@ -363,6 +363,7 @@ model GiveawaySettings {
   quickDaysAhead    Int     @default(1)
   quickTime         String  @default("23:00")
   quickBoostersOnly Boolean @default(false)
+  defaultRepeatEveryDays Int @default(0)
   updatedAt     DateTime @updatedAt
 }
 
@@ -391,6 +392,13 @@ model Giveaway {
   needsPublish Boolean        @default(false)
   // Почему бот не смог опубликовать розыгрыш из панели. Показывается на странице розыгрыша.
   publishError String?
+  startsAt     DateTime?
+  publishRetryAt DateTime?
+  repeatEveryDays Int?
+  repeatTimezone String?
+  repeatFromId Int? @unique
+  autoPromoAmount Int?
+  autoPromoSeed String?
   entries      GiveawayEntry[]
   promoCodes   GiveawayPromoCode[]
   createdAt    DateTime       @default(now())

@@ -1,4 +1,4 @@
-import { GIVEAWAY_MAX_WINNERS, getGiveawaySettings, prisma } from "@flamebot/core";
+import { GIVEAWAY_MAX_WINNERS, GIVEAWAY_REPEAT_OPTIONS, getGiveawaySettings, prisma } from "@flamebot/core";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { FieldRow, NumberInput, PageHead, Section, Switch } from "@/components/Fields";
 import { requirePage } from "@/lib/auth";
@@ -89,6 +89,11 @@ export default async function GiveawaySettingsPage() {
             </FieldRow>
             <FieldRow icon="ticket" label="Только для бустеров" hint="Участвовать смогут только те, кто бустит сервер">
               <Switch name="quickBoostersOnly" defaultChecked={s.quickBoostersOnly} label="Только для бустеров" />
+            </FieldRow>
+            <FieldRow icon="clock" label="Повторение по умолчанию" hint="Предвыбор для новых розыгрышей по расписанию. Его можно изменить при создании.">
+              <select name="defaultRepeatEveryDays" defaultValue={s.defaultRepeatEveryDays} aria-label="Повторение розыгрыша по умолчанию">
+                {GIVEAWAY_REPEAT_OPTIONS.map(option => <option key={option.days} value={option.days}>{option.label}</option>)}
+              </select>
             </FieldRow>
           </div>
         </Section>

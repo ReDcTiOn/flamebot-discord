@@ -7,8 +7,12 @@ const GIVEAWAY_STATUS: Record<GiveawayStatus, { label: string; chip: string }> =
 };
 
 // Статус для панели. Розыгрыш из панели сначала ждёт, пока бот отправит его в канал.
-export function giveawayStatus(g: { status: GiveawayStatus; needsPublish: boolean; publishError: string | null }): { label: string; chip: string } {
-  if (g.status === "ACTIVE" && g.needsPublish) return { label: "Ждёт публикации", chip: "chip warn" };
+export function giveawayStatus(g: { status: GiveawayStatus; needsPublish: boolean; publishError: string | null; startsAt: Date | null }): { label: string; chip: string } {
+  if (g.status === "ACTIVE" && g.needsPublish) {
+    if (g.publishError) return { label: "Ошибка публикации", chip: "chip danger" };
+    if (g.startsAt && g.startsAt.getTime() > Date.now()) return { label: "Запланирован", chip: "chip accent" };
+    return { label: "Ждёт публикации", chip: "chip warn" };
+  }
   if (g.status === "CANCELLED" && g.publishError) return { label: "Не опубликован", chip: "chip danger" };
   return GIVEAWAY_STATUS[g.status];
 }

@@ -1,4 +1,4 @@
-import { randomInt } from "node:crypto";
+import { randomBytes, randomInt } from "node:crypto";
 import {
   ActionRowBuilder,
   AttachmentBuilder,
@@ -20,7 +20,8 @@ import {
   type GuildTextBasedChannel,
   type MessageActionRowComponentBuilder,
 } from "discord.js";
-import { formatInZone, plural, prisma, renderTemplate, type Giveaway, type GiveawayPromoCode } from "@flamebot/core";
+import { formatInZone, nextGiveawayStart, plural, prisma, renderTemplate, type Giveaway, type GiveawayPromoCode } from "@flamebot/core";
+import { createScheduledPromos, promoRetry } from "./balance-promos.js";
 import { renderBanner } from "./banner.js";
 import { event, log } from "./events.js";
 import { getSettings, mentions, unix, withLock } from "./util.js";
@@ -339,10 +340,41 @@ export async function finish(guild: Guild, id: number, { notifyHost = true, byId
   return g;
 }
 
-// Фоновая задача: подведение итогов, обновление счётчиков и сообщений, изменённых из панели.
-// Отменяет розыгрыш из панели, который не получилось опубликовать, и сохраняет причину для панели.
+// Следующий экземпляр сохраняется в той же транзакции, что и исход публикации.
+async function queueNextOccurrence(tx: Pick<typeof prisma, "giveaway">, g: Giveaway) {
+  if (!g.startsAt || !g.repeatEveryDays || !g.repeatTimezone) return;
+  const startsAt = nextGiveawayStart(g.startsAt, g.repeatEveryDays, g.repeatTimezone, new Date());
+  const duration = g.endsAt.getTime() - g.startsAt.getTime();
+  await tx.giveaway.create({
+    data: {
+      channelId: g.channelId,
+      hostId: g.hostId,
+      prize: g.prize,
+      description: g.description,
+      winnersCount: g.winnersCount,
+      boostersOnly: g.boostersOnly,
+      startsAt,
+      endsAt: new Date(startsAt.getTime() + duration),
+      repeatEveryDays: g.repeatEveryDays,
+      repeatTimezone: g.repeatTimezone,
+      repeatFromId: g.id,
+      needsPublish: true,
+      autoPromoAmount: g.autoPromoAmount,
+      autoPromoSeed: g.autoPromoAmount !== null ? randomBytes(32).toString("hex") : null,
+    },
+  });
+}
+
 async function failPublish(g: Giveaway, reason: string): Promise<void> {
-  await prisma.giveaway.updateMany({ where: { id: g.id, status: "ACTIVE" }, data: { status: "CANCELLED", needsPublish: false, publishError: reason } });
+  const failed = await prisma.$transaction(async tx => {
+    const result = await tx.giveaway.updateMany({
+      where: { id: g.id, status: "ACTIVE", needsPublish: true },
+      data: { status: "CANCELLED", needsPublish: false, publishError: reason, publishRetryAt: null },
+    });
+    if (result.count) await queueNextOccurrence(tx, g);
+    return result.count > 0;
+  });
+  if (!failed) return;
   event("giveaway.publish_failed", `Розыгрыш #${g.id} «${g.prize}» не опубликован: ${reason}`, {
     level: "WARN",
     memberId: g.hostId,
@@ -352,10 +384,19 @@ async function failPublish(g: Giveaway, reason: string): Promise<void> {
 
 // Публикует розыгрыши из панели и быстрые розыгрыши с готовыми промокодами.
 async function publishPending(guild: Guild): Promise<void> {
-  const pending = await prisma.giveaway.findMany({ where: { needsPublish: true, status: "ACTIVE" }, orderBy: { id: "asc" }, take: 10 });
+  const now = new Date();
+  const pending = await prisma.giveaway.findMany({
+    where: { needsPublish: true, status: "ACTIVE", AND: [
+      { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
+      { OR: [{ publishRetryAt: null }, { publishRetryAt: { lte: now } }, { endsAt: { lte: now } }] },
+    ] },
+    orderBy: { id: "asc" },
+    select: { id: true },
+    take: 10,
+  });
   for (const row of pending) {
     await withLock(`giveaway:${row.id}`, async () => {
-      const g = await loadGiveaway({ id: row.id });
+      let g = await loadGiveaway({ id: row.id });
       if (!g || !g.needsPublish || g.status !== "ACTIVE") return;
       // Бот был выключен, и время итогов прошло раньше, чем розыгрыш успели показать участникам.
       if (g.endsAt.getTime() <= Date.now() + 60_000) return failPublish(g, "время итогов прошло раньше, чем бот успел отправить розыгрыш в канал");
@@ -364,16 +405,55 @@ async function publishPending(guild: Guild): Promise<void> {
       const missing = missingPermissions(channel);
       if (missing.length > 0) return failPublish(g, `боту не хватает прав в #${channel.name}: ${missing.join(", ")}`);
 
+      if (g.autoPromoAmount !== null && g.autoPromoSeed && !g.hasPromo) {
+        const { id, autoPromoSeed } = g;
+        let codes: string[];
+        try {
+          codes = await createScheduledPromos(g.endsAt, g.winnersCount, g.autoPromoAmount, autoPromoSeed);
+        } catch (err) {
+          await prisma.giveaway.updateMany({
+            where: { id, status: "ACTIVE", needsPublish: true },
+            data: promoRetry(err),
+          });
+          return;
+        }
+        await prisma.$transaction(async (tx) => {
+          const changed = await tx.giveaway.updateMany({
+            where: { id, status: "ACTIVE", needsPublish: true, autoPromoSeed },
+            data: { autoPromoSeed: null, publishError: null, publishRetryAt: null },
+          });
+          if (changed.count) await tx.giveawayPromoCode.createMany({ data: codes.map(code => ({ giveawayId: id, code })) });
+        });
+        g = await loadGiveaway({ id });
+        if (!g || g.status !== "ACTIVE" || !g.needsPublish || !g.hasPromo) return;
+      }
+
+      if (g.endsAt.getTime() <= Date.now() + 60_000) return failPublish(g, "время итогов прошло раньше, чем бот успел отправить розыгрыш в канал");
       let messageId: string;
       try {
         messageId = (await sendGiveaway(channel, g)).id;
       } catch (err) {
         // Сбой Discord может быть временным: оставляем розыгрыш в очереди, бот попробует снова.
-        await prisma.giveaway.update({ where: { id: g.id }, data: { publishError: "Discord не принял сообщение, бот попробует ещё раз" } });
+        await prisma.giveaway.update({ where: { id: g.id }, data: { publishError: "Discord не принял сообщение, бот попробует ещё раз", publishRetryAt: new Date(Date.now() + 30_000) } });
         log.warn(`Не удалось опубликовать розыгрыш #${g.id} из очереди`, err);
         return;
       }
-      await prisma.giveaway.update({ where: { id: g.id }, data: { messageId, needsPublish: false, publishError: null } });
+      const completed = g;
+      const published = await prisma.$transaction(async tx => {
+        const result = await tx.giveaway.updateMany({
+          where: { id: completed.id, status: "ACTIVE", needsPublish: true },
+          data: { messageId, needsPublish: false, publishError: null, publishRetryAt: null },
+        });
+        if (result.count) await queueNextOccurrence(tx, completed);
+        return result.count > 0;
+      });
+      if (!published) {
+        await prisma.giveaway.updateMany({
+          where: { id: g.id, status: "CANCELLED", messageId: null },
+          data: { messageId, needsMessageUpdate: true },
+        });
+        return;
+      }
       const { timezone } = await getSettings();
       event("giveaway.created", `Опубликован розыгрыш #${g.id} «${g.prize}» из очереди: ${g.winnersCount} ${plural(g.winnersCount, "победитель", "победителя", "победителей")}, итоги ${formatInZone(g.endsAt, timezone)}`, {
         memberId: g.hostId,

@@ -65,7 +65,7 @@ export default async function GiveawayOverview() {
         </div>
       </div>
 
-      <Section title="Идут сейчас" hint="Итоги бот подводит сам в назначенное время. Досрочно завершить или отменить можно на странице розыгрыша.">
+      <Section title="Активные и запланированные" hint="Итоги бот подводит сам в назначенное время. Досрочно завершить или отменить можно на странице розыгрыша.">
         {active.length === 0 ? (
           <EmptyState icon="gift" title="Активных розыгрышей нет" hint="Нажми «Новый розыгрыш» или создай его в Discord: /розыгрыш создать." />
         ) : (
@@ -87,7 +87,7 @@ export default async function GiveawayOverview() {
                       <Link href={`/giveaway/${g.id}`} className="member-link">#{g.id} · {g.prize}</Link>{" "}
                       {g.boostersOnly && <span className="chip">🚀 бустеры</span>}{" "}
                       {g._count.promoCodes > 0 && <span className="chip">🎟 промокоды</span>}{" "}
-                      {g.needsPublish && <span className="chip warn">ждёт публикации</span>}
+                      {g.needsPublish && <span className="chip warn">{g.startsAt && g.startsAt > new Date() ? `Старт ${formatInZone(g.startsAt, tz)}` : "Ждёт публикации"}</span>}
                     </td>
                     <td>
                       {formatInZone(g.endsAt, tz)} <span className="muted">· {relative(g.endsAt)}</span>

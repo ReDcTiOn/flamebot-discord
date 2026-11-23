@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ExternalLink } from "lucide-react";
-import { formatInZone, formatNumber, getGiveawaySettings, plural, prisma } from "@flamebot/core";
+import { GIVEAWAY_REPEAT_OPTIONS, formatInZone, formatNumber, getGiveawaySettings, plural, prisma } from "@flamebot/core";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { DangerZone, EmptyState, Section } from "@/components/Fields";
@@ -34,9 +34,10 @@ export default async function GiveawayPage({ params }: { params: Promise<{ id: s
   if (!g) notFound();
 
   const tz = settings.timezone;
-  const [names, channels] = await Promise.all([
+  const [names, channels, next] = await Promise.all([
     memberNames([g.hostId, ...g.winners, ...g.entries.map((e) => e.userId), ...g.promoCodes.flatMap((p) => (p.userId ? [p.userId] : []))]),
     channelNames([g.channelId]),
+    g.repeatEveryDays ? prisma.giveaway.findUnique({ where: { repeatFromId: id }, select: { id: true, status: true, startsAt: true } }) : null,
   ]);
   const name = (uid: string) => names.get(uid) ?? uid;
   const person = (uid: string) =>
@@ -46,6 +47,7 @@ export default async function GiveawayPage({ params }: { params: Promise<{ id: s
       <span className="muted">{uid}</span>
     );
   const status = giveawayStatus(g);
+  const recurrence = GIVEAWAY_REPEAT_OPTIONS.find(option => option.days === g.repeatEveryDays);
   const winners = new Set(g.winners);
   // Промокоды стоят денег: сами коды видят только администраторы сервера.
   const showCodes = user.level === "full";
@@ -62,8 +64,9 @@ export default async function GiveawayPage({ params }: { params: Promise<{ id: s
           <h1>#{g.id} · {g.prize}</h1>
           <div className="secondary" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 4 }}>
             <span className={status.chip}>{status.label}</span>
+            {recurrence && <span className="chip">{recurrence.label}</span>}
             {g.boostersOnly && <span className="chip">🚀 Только бустеры</span>}
-            {g.promoCodes.length > 0 && <span className="chip">🎟 Промокоды в ЛС</span>}
+            {(g.promoCodes.length > 0 || g.autoPromoAmount !== null) && <span className="chip">🎟 {g.autoPromoAmount === null ? "Промокоды" : `${g.autoPromoAmount} ₽ на победителя`}</span>}
             <span>#{channels.get(g.channelId) ?? g.channelId}</span>
           </div>
         </div>
@@ -83,8 +86,15 @@ export default async function GiveawayPage({ params }: { params: Promise<{ id: s
 
       {g.needsPublish && (
         <p className="notice">
-          Розыгрыш создан в панели. Бот отправит его в канал в течение 10 секунд после создания, если он запущен.
+          {g.startsAt ? `Старт по расписанию: ${formatInZone(g.startsAt, g.repeatTimezone ?? tz)} (${g.repeatTimezone ?? settings.timezoneLabel}).` : "Бот отправит розыгрыш в канал, когда обработает очередь."}
+          {g.autoPromoAmount !== null && !g.promoCodes.length ? " Перед публикацией бот создаст промокоды." : ""}
           {g.publishError ? ` Последняя попытка: ${g.publishError}.` : ""}
+        </p>
+      )}
+      {next?.startsAt && next.status === "ACTIVE" && (
+        <p className="notice">
+          Следующий розыгрыш: <Link className="link" href={`/giveaway/${next.id}`}>{formatInZone(next.startsAt, g.repeatTimezone ?? tz)}</Link>.
+          Чтобы остановить серию, открой и отмени следующий запланированный розыгрыш.
         </p>
       )}
       {!g.needsPublish && g.status === "CANCELLED" && g.publishError && (
@@ -198,7 +208,7 @@ export default async function GiveawayPage({ params }: { params: Promise<{ id: s
               </ActionForm>
             }
           >
-            Итоги не подводятся, кнопка «Участвовать» пропадёт, в сообщении появится «Розыгрыш отменён».
+            {g.needsPublish ? (recurrence ? "Бот отменит публикацию и остановит серию." : "Бот отменит запланированную публикацию.") : "Итоги не подводятся, кнопка «Участвовать» пропадёт, в сообщении появится «Розыгрыш отменён»."}
           </DangerZone>
         </Section>
       )}
