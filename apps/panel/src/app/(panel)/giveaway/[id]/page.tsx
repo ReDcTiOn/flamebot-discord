@@ -49,7 +49,7 @@ export default async function GiveawayPage({ params }: { params: Promise<{ id: s
   const winners = new Set(g.winners);
   // Промокоды стоят денег: сами коды видят только администраторы сервера.
   const showCodes = user.level === "full";
-  const undelivered = g.promoCodes.filter((p) => p.userId && !p.dmSent).length;
+  const undelivered = g.promoCodes.filter((p) => p.userId && !p.dmSent && !p.claimedAt).length;
 
   return (
     <>
@@ -154,6 +154,8 @@ export default async function GiveawayPage({ params }: { params: Promise<{ id: s
                     <td>
                       {!p.userId ? (
                         <span className="muted">—</span>
+                      ) : p.claimedAt ? (
+                        <span className="chip success">Получен в канале</span>
                       ) : p.dmSent ? (
                         <span className="chip success">В ЛС</span>
                       ) : (

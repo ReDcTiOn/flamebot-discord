@@ -1,11 +1,16 @@
 import { randomInt } from "node:crypto";
 import {
   ActionRowBuilder,
+  AttachmentBuilder,
+  ContainerBuilder,
+  MediaGalleryBuilder,
+  MediaGalleryItemBuilder,
+  SeparatorBuilder,
+  TextDisplayBuilder,
   ButtonBuilder,
   ButtonStyle,
   Colors,
   DiscordAPIError,
-  EmbedBuilder,
   MessageFlags,
   PermissionFlagsBits,
   RESTJSONErrorCodes,
@@ -16,17 +21,32 @@ import {
   type MessageActionRowComponentBuilder,
 } from "discord.js";
 import { formatInZone, plural, prisma, renderTemplate, type Giveaway, type GiveawayPromoCode } from "@flamebot/core";
+import { renderBanner } from "./banner.js";
 import { event, log } from "./events.js";
 import { getSettings, mentions, unix, withLock } from "./util.js";
 
 export const JOIN_BUTTON_ID = "giveaway:join";
+export const CLAIM_BUTTON_PREFIX = "giveaway:claim:";
 // Фирменный оранжевый цвет Flame.
 export const EMBED_COLOR = 0xff5a1f;
 
 export type GiveawayFull = Giveaway & { hasPromo: boolean; entryCount: number };
 
 // Розыгрыши, у которых надо обновить счётчик участников в сообщении.
-export const dirty = new Set<number>();
+const dirty = new Set<number>();
+
+export function scheduleCountUpdate(guild: Guild, id: number) {
+  if (dirty.has(id)) return;
+  dirty.add(id);
+  // Объединяем близкие нажатия, чтобы не загружать PNG при каждом из них.
+  setTimeout(() => {
+    if (dirty.delete(id)) {
+      void updateMessage(guild, id, true).catch(() => {
+        log.warn(`Не удалось обновить число участников розыгрыша #${id}`);
+      });
+    }
+  }, 1000).unref();
+}
 
 export async function loadGiveaway(where: { id: number } | { messageId: string }): Promise<GiveawayFull | null> {
   const row = await prisma.giveaway.findUnique({ where, include: { _count: { select: { entries: true, promoCodes: true } } } });
@@ -37,48 +57,60 @@ export async function loadGiveaway(where: { id: number } | { messageId: string }
 
 export const jumpUrl = (guildId: string, g: Giveaway) => `https://discord.com/channels/${guildId}/${g.channelId}/${g.messageId}`;
 
-export function joinRow() {
+function joinRow() {
   return new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-    new ButtonBuilder().setCustomId(JOIN_BUTTON_ID).setLabel("Участвовать").setEmoji("🎉").setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(JOIN_BUTTON_ID).setLabel("Участвовать").setEmoji("🎉").setStyle(ButtonStyle.Primary),
   );
 }
 
-export function buildEmbed(g: GiveawayFull, guild: Guild): EmbedBuilder {
-  const ends = unix(g.endsAt);
-  let embed: EmbedBuilder;
-  if (g.status === "ACTIVE") {
-    embed = new EmbedBuilder()
-      .setTitle(`🎁 ${g.prize}`)
-      .setDescription(g.description)
-      .setColor(EMBED_COLOR)
-      .addFields(
-        { name: "🏆 Победителей", value: String(g.winnersCount), inline: true },
-        { name: "👥 Участников", value: String(g.entryCount), inline: true },
-        { name: "⏰ Итоги", value: `<t:${ends}:F>\n<t:${ends}:R>` },
-      )
-      .setFooter({ text: "Жми «Участвовать», чтобы испытать удачу" });
-    if (g.boostersOnly) embed.addFields({ name: "🚀 Условие", value: "Участвовать могут только **бустеры сервера**" });
-    if (g.hasPromo) {
-      embed.addFields({
-        name: "📩 Получение приза",
-        value: "Промокод придёт победителю в личные сообщения - проверь, открыто ли у тебя ЛС от участников сервера.",
-      });
-    }
-  } else if (g.status === "ENDED") {
-    embed = new EmbedBuilder()
-      .setTitle(`🏁 ${g.prize}`)
-      .setDescription(g.description)
-      .setColor(Colors.DarkGrey)
-      .addFields(
-        { name: "🏆 Победители", value: g.winners.map((id) => `🥇 <@${id}>`).join("\n") || "Никого - не хватило участников" },
-        { name: "👥 Участников", value: String(g.entryCount), inline: true },
-        { name: "⏰ Итоги подведены", value: `<t:${ends}:F>`, inline: true },
-      )
-      .setFooter({ text: "Розыгрыш завершён" });
+export async function buildGiveawayMessage(g: GiveawayFull, publish = false) {
+  const text = (content: string) => new TextDisplayBuilder().setContent(content);
+  const container = new ContainerBuilder().setAccentColor(
+    g.status === "ACTIVE" ? EMBED_COLOR : g.status === "ENDED" ? 0x68cb9a : Colors.Red,
+  );
+  const files: AttachmentBuilder[] = [];
+  if (g.status === "CANCELLED") {
+    container.addTextDisplayComponents(text(`## Розыгрыш отменён\n${escapeMarkdown(g.prize)}`));
   } else {
-    embed = new EmbedBuilder().setTitle(`❌ ${g.prize}`).setDescription("Розыгрыш отменён.").setColor(Colors.Red);
+    const alt = `${g.prize}. Участников: ${g.entryCount}. ${g.winnersCount} ${plural(g.winnersCount, "приз", "приза", "призов")}.`.slice(0, 1024);
+    const filename = "giveaway.png";
+    files.push(new AttachmentBuilder(await renderBanner(g), { name: filename, description: alt }));
+    if (g.status === "ACTIVE") container.addTextDisplayComponents(text("||@everyone||"));
+    container.addMediaGalleryComponents(new MediaGalleryBuilder().addItems(
+      new MediaGalleryItemBuilder().setURL(`attachment://${filename}`).setDescription(alt),
+    ));
+    if (g.description?.trim()) container.addTextDisplayComponents(text(g.description.slice(0, 1500).replace(/@(everyone|here)/g, "@\u200b$1")));
+    container.addSeparatorComponents(new SeparatorBuilder());
+
+    if (g.status === "ACTIVE") {
+      const ends = unix(g.endsAt);
+      const details = [`⏳ **Итоги** · <t:${ends}:F> · <t:${ends}:R>`];
+      if (g.boostersOnly) details.push("🚀 Участвовать могут только бустеры сервера.");
+      if (g.hasPromo) details.push("🎟 Победители получат промокод в ЛС или смогут забрать его здесь после итогов.");
+      container.addTextDisplayComponents(text(details.join("\n"))).addActionRowComponents(joinRow());
+    } else {
+      const names = mentions(g.winners.slice(0, 40));
+      const remaining = g.winners.length - 40;
+      container.addTextDisplayComponents(text(`**🏆 Победители**\n${names || "Победителей нет."}${remaining > 0 ? ` и ещё ${remaining}` : ""}`));
+      if (g.hasPromo && g.winners.length > 0) {
+        container.addSeparatorComponents(new SeparatorBuilder())
+          .addTextDisplayComponents(text("Промокод не пришёл в ЛС? Забери его здесь."))
+          .addActionRowComponents(new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+            new ButtonBuilder().setCustomId(`${CLAIM_BUTTON_PREFIX}${g.id}`).setLabel("Получить промокод").setEmoji("🎟").setStyle(ButtonStyle.Primary),
+          ));
+      }
+    }
   }
-  return embed.setAuthor({ name: `${guild.name} · Розыгрыш`, iconURL: guild.iconURL() ?? undefined });
+  return {
+    flags: MessageFlags.IsComponentsV2 as const,
+    components: [container],
+    files,
+    allowedMentions: { parse: publish && g.status === "ACTIVE" ? ["everyone" as const] : [], repliedUser: false },
+  };
+}
+
+export async function sendGiveaway(channel: GuildTextBasedChannel, g: GiveawayFull) {
+  return channel.send({ ...await buildGiveawayMessage(g, true), nonce: `giveaway:${g.id}`, enforceNonce: true });
 }
 
 const isCode = (err: unknown, code: number) => err instanceof DiscordAPIError && err.code === code;
@@ -91,7 +123,7 @@ export function missingPermissions(channel: GuildTextBasedChannel): string[] {
     [
       ["Просматривать канал", PermissionFlagsBits.ViewChannel],
       ["Отправлять сообщения", PermissionFlagsBits.SendMessages],
-      ["Встраивать ссылки", PermissionFlagsBits.EmbedLinks],
+      ["Прикреплять файлы", PermissionFlagsBits.AttachFiles],
       ["Читать историю сообщений", PermissionFlagsBits.ReadMessageHistory],
     ] as const
   )
@@ -105,18 +137,26 @@ export async function resolveChannel(guild: Guild, channelId: string): Promise<G
   return channel;
 }
 
-// Перерисовывает сообщение розыгрыша. removeView — убрать кнопку «Участвовать».
-export async function updateMessage(guild: Guild, g: GiveawayFull, removeView = false): Promise<string | null> {
-  if (!g.messageId) return null;
-  const channel = await resolveChannel(guild, g.channelId);
-  if (!channel) return null;
-  try {
-    await channel.messages.edit(g.messageId, { embeds: [buildEmbed(g, guild)], ...(removeView ? { components: [] } : {}) });
-    return g.messageId;
-  } catch (err) {
-    if (!isCode(err, RESTJSONErrorCodes.UnknownMessage)) log.warn(`Не удалось обновить сообщение розыгрыша #${g.id}`, err);
-    return null;
-  }
+// Перечитываем запись под той же блокировкой, что и при подведении итогов.
+export async function updateMessage(guild: Guild, id: number, activeOnly = false): Promise<string | null> {
+  return withLock(`giveaway:${id}`, async () => {
+    const g = await loadGiveaway({ id });
+    if (!g?.messageId || (activeOnly && g.status !== "ACTIVE")) return null;
+    const channel = await resolveChannel(guild, g.channelId);
+    if (!channel) return null;
+    try {
+      await channel.messages.edit(g.messageId, {
+        ...await buildGiveawayMessage(g),
+        content: null,
+        embeds: [],
+        attachments: [],
+      });
+      return g.messageId;
+    } catch (err) {
+      if (!isCode(err, RESTJSONErrorCodes.UnknownMessage)) log.warn(`Не удалось обновить сообщение розыгрыша #${g.id}`, err);
+      return null;
+    }
+  });
 }
 
 // Случайно выбирает победителей среди тех, кто ещё на сервере (и бустит, если это условие).
@@ -154,7 +194,7 @@ export async function draw(guild: Guild, g: Giveaway, count: number, exclude: Re
 export async function assignPromos(g: GiveawayFull, winners: string[], reuseUndelivered = false): Promise<GiveawayPromoCode[]> {
   if (!g.hasPromo || winners.length === 0) return [];
   const free = await prisma.giveawayPromoCode.findMany({
-    where: { giveawayId: g.id, ...(reuseUndelivered ? { OR: [{ userId: null }, { dmSent: false }] } : { userId: null }) },
+    where: { giveawayId: g.id, ...(reuseUndelivered ? { OR: [{ userId: null }, { dmSent: false, claimedAt: null }] } : { userId: null }) },
     orderBy: { id: "asc" },
   });
   // Сначала ни разу не выданные, потом недоставленные.
@@ -174,10 +214,10 @@ async function sendPromoDm(guild: Guild, g: Giveaway, promo: GiveawayPromoCode):
   const text = renderTemplate(promoDmText, { prize: g.prize, code: escapeMarkdown(promo.code) }).slice(0, 2000);
   try {
     const user = await guild.client.users.fetch(promo.userId!);
-    await user.send({ content: text, flags: MessageFlags.SuppressEmbeds });
+    await user.send({ content: text, flags: MessageFlags.SuppressEmbeds, allowedMentions: { parse: [] } });
     return true;
-  } catch (err) {
-    log.warn(`Не удалось отправить промокод в ЛС пользователю ${promo.userId}`, err);
+  } catch {
+    log.warn(`Не удалось отправить промокод в ЛС пользователю ${promo.userId}`);
     return false;
   }
 }
@@ -195,7 +235,7 @@ export async function sendPromos(guild: Guild, g: Giveaway, promos: GiveawayProm
 }
 
 export async function hasUndelivered(giveawayId: number): Promise<boolean> {
-  return (await prisma.giveawayPromoCode.count({ where: { giveawayId, userId: { not: null }, dmSent: false } })) > 0;
+  return (await prisma.giveawayPromoCode.count({ where: { giveawayId, userId: { not: null }, dmSent: false, claimedAt: null } })) > 0;
 }
 
 // Кому какой промокод достался — видит только администрация.
@@ -205,6 +245,7 @@ export async function promoReport(g: Giveaway): Promise<string> {
   const unused: string[] = [];
   for (const p of codes) {
     if (p.userId === null) unused.push(`\`${p.code}\``);
+    else if (p.claimedAt) lines.push(`✅ <@${p.userId}> · получен в канале · \`${p.code}\``);
     else if (p.dmSent) lines.push(`✅ <@${p.userId}> - \`${p.code}\``);
     else lines.push(`❌ <@${p.userId}> - \`${p.code}\` · не дошёл (закрыты ЛС)`);
   }
@@ -225,7 +266,7 @@ async function reportToHost(guild: Guild, g: Giveaway): Promise<void> {
 
 export async function announce(
   guild: Guild,
-  g: Giveaway,
+  g: GiveawayFull,
   winners: string[],
   replyTo: string | null,
   promos: GiveawayPromoCode[],
@@ -249,14 +290,17 @@ export async function announce(
   const failed = promos.filter((p) => !p.dmSent).map((p) => p.userId!);
   if (delivered.length > 0) text += `\n📩 ${delivered.length === 1 ? "Промокод отправлен" : "Промокоды отправлены"} в личные сообщения.`;
   if (failed.length > 0) {
-    text += `\n⚠️ ${mentions(failed)}, не получилось отправить промокод - у тебя закрыты ЛС. Создать тикет для выдачи промокода.`;
+    text += `\n⚠️ ${mentions(failed)}, не получилось отправить промокод - у тебя закрыты ЛС. Нажми «Получить промокод» в карточке розыгрыша.`;
   }
 
   try {
+    if (!replyTo) {
+      await channel.send(await buildGiveawayMessage(g));
+    }
     await channel.send({
       content: text,
       reply: replyTo ? { messageReference: replyTo, failIfNotExists: false } : undefined,
-      allowedMentions: { users: winners, roles: [], repliedUser: false },
+      allowedMentions: { parse: [], users: winners, roles: [], repliedUser: false },
     });
   } catch (err) {
     log.warn(`Не удалось отправить итоги розыгрыша #${g.id}`, err);
@@ -273,15 +317,14 @@ export async function finish(guild: Guild, id: number, { notifyHost = true, byId
     // Условие по статусу: если панель успела отменить розыгрыш, итоги не подводим.
     const { count } = await prisma.giveaway.updateMany({ where: { id, status: "ACTIVE" }, data: { status: "ENDED", winners, endsAt: endedAt } });
     if (count === 0) return null;
-    const promos = await assignPromos(g, winners);
+    const promos = await sendPromos(guild, g, await assignPromos(g, winners));
     return { g: (await loadGiveaway({ id }))!, winners, promos };
   });
   if (!result) return null;
-  const { g, winners } = result;
+  const { g, winners, promos } = result;
 
   dirty.delete(g.id);
-  const promos = await sendPromos(guild, g, result.promos);
-  const messageId = await updateMessage(guild, g, true);
+  const messageId = await updateMessage(guild, g.id);
   await announce(guild, g, winners, messageId, promos);
   if (g.hasPromo && notifyHost) await reportToHost(guild, g);
 
@@ -300,14 +343,14 @@ export async function finish(guild: Guild, id: number, { notifyHost = true, byId
 // Отменяет розыгрыш из панели, который не получилось опубликовать, и сохраняет причину для панели.
 async function failPublish(g: Giveaway, reason: string): Promise<void> {
   await prisma.giveaway.updateMany({ where: { id: g.id, status: "ACTIVE" }, data: { status: "CANCELLED", needsPublish: false, publishError: reason } });
-  event("giveaway.publish_failed", `Розыгрыш #${g.id} «${g.prize}» из панели не опубликован: ${reason}`, {
+  event("giveaway.publish_failed", `Розыгрыш #${g.id} «${g.prize}» не опубликован: ${reason}`, {
     level: "WARN",
     memberId: g.hostId,
     details: { giveawayId: g.id, channelId: g.channelId },
   });
 }
 
-// Публикует розыгрыши, созданные в панели: у панели нет токена, поэтому сообщение в канал отправляет бот.
+// Публикует розыгрыши из панели и быстрые розыгрыши с готовыми промокодами.
 async function publishPending(guild: Guild): Promise<void> {
   const pending = await prisma.giveaway.findMany({ where: { needsPublish: true, status: "ACTIVE" }, orderBy: { id: "asc" }, take: 10 });
   for (const row of pending) {
@@ -323,18 +366,18 @@ async function publishPending(guild: Guild): Promise<void> {
 
       let messageId: string;
       try {
-        messageId = (await channel.send({ embeds: [buildEmbed(g, guild)], components: [joinRow()] })).id;
+        messageId = (await sendGiveaway(channel, g)).id;
       } catch (err) {
         // Сбой Discord может быть временным: оставляем розыгрыш в очереди, бот попробует снова.
         await prisma.giveaway.update({ where: { id: g.id }, data: { publishError: "Discord не принял сообщение, бот попробует ещё раз" } });
-        log.warn(`Не удалось опубликовать розыгрыш #${g.id} из панели`, err);
+        log.warn(`Не удалось опубликовать розыгрыш #${g.id} из очереди`, err);
         return;
       }
       await prisma.giveaway.update({ where: { id: g.id }, data: { messageId, needsPublish: false, publishError: null } });
       const { timezone } = await getSettings();
-      event("giveaway.created", `Опубликован розыгрыш #${g.id} «${g.prize}» из панели: ${g.winnersCount} ${plural(g.winnersCount, "победитель", "победителя", "победителей")}, итоги ${formatInZone(g.endsAt, timezone)}`, {
+      event("giveaway.created", `Опубликован розыгрыш #${g.id} «${g.prize}» из очереди: ${g.winnersCount} ${plural(g.winnersCount, "победитель", "победителя", "победителей")}, итоги ${formatInZone(g.endsAt, timezone)}`, {
         memberId: g.hostId,
-        details: { giveawayId: g.id, channelId: g.channelId, winners: g.winnersCount, endsAt: g.endsAt.toISOString(), boostersOnly: g.boostersOnly, fromPanel: true },
+        details: { giveawayId: g.id, channelId: g.channelId, winners: g.winnersCount, endsAt: g.endsAt.toISOString(), boostersOnly: g.boostersOnly },
       });
     });
   }
@@ -355,16 +398,15 @@ export async function tick(guild: Guild): Promise<void> {
 
   const flagged = await prisma.giveaway.findMany({ where: { needsMessageUpdate: true }, select: { id: true }, take: 20 });
   for (const { id } of flagged) {
-    const g = await loadGiveaway({ id });
-    if (g) await updateMessage(guild, g, g.status !== "ACTIVE");
-    await prisma.giveaway.update({ where: { id }, data: { needsMessageUpdate: false } });
     dirty.delete(id);
+    const g = await loadGiveaway({ id });
+    if (g) await updateMessage(guild, g.id);
+    await prisma.giveaway.update({ where: { id }, data: { needsMessageUpdate: false } });
   }
 
   const ids = [...dirty];
   dirty.clear();
   for (const id of ids) {
-    const g = await loadGiveaway({ id });
-    if (g?.status === "ACTIVE") await updateMessage(guild, g);
+    await updateMessage(guild, id, true);
   }
 }

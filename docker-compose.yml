@@ -108,6 +108,7 @@ services:
     environment:
       # Необязателен: токен задаётся в панели («Подключение»), старый отсюда переносится в базу.
       GIVEAWAY_DISCORD_TOKEN: ${GIVEAWAY_DISCORD_TOKEN:-}
+      GIVEAWAY_FLAMERUST_API_KEY: ${GIVEAWAY_FLAMERUST_API_KEY:-}
       GUILD_ID: ${GUILD_ID}
       DATABASE_URL: postgresql://flamebot:${POSTGRES_PASSWORD}@db:5432/flamebot
     volumes:

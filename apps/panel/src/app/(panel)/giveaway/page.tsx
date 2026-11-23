@@ -27,8 +27,8 @@ export default async function GiveawayOverview() {
     prisma.giveaway.findMany({ where: { status: "ENDED" }, orderBy: { endsAt: "desc" }, take: 5, include: { _count: { select: { entries: true } } } }),
     prisma.giveaway.count({ where: { status: "ENDED" } }),
     prisma.giveawayEntry.count({ where: { joinedAt: { gte: monthAgo } } }),
-    prisma.giveawayPromoCode.count({ where: { userId: { not: null }, dmSent: true } }),
-    prisma.giveawayPromoCode.count({ where: { userId: { not: null }, dmSent: false } }),
+    prisma.giveawayPromoCode.count({ where: { userId: { not: null }, OR: [{ dmSent: true }, { claimedAt: { not: null } }] } }),
+    prisma.giveawayPromoCode.count({ where: { userId: { not: null }, dmSent: false, claimedAt: null } }),
     prisma.botEvent.count({ where: { botKey: "giveaway", level: { in: ["WARN", "ERROR"] }, createdAt: { gte: new Date(Date.now() - 86_400_000) } } }),
   ]);
   const names = await memberNames(recent.flatMap((g) => g.winners));

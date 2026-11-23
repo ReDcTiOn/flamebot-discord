@@ -419,6 +419,7 @@ model GiveawayPromoCode {
   userId     String?
   // Дошло ли сообщение в ЛС.
   dmSent     Boolean  @default(false)
+  claimedAt  DateTime?
 
   @@index([giveawayId])
 }

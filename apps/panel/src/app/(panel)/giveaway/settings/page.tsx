@@ -69,7 +69,7 @@ export default async function GiveawaySettingsPage() {
           </div>
         </Section>
 
-        <Section title="Быстрый розыгрыш" hint="Команда /розыгрыш быстрый: розыгрыш с этими настройками в текущем канале, остаётся только вставить промокоды.">
+        <Section title="Настройки новых розыгрышей" hint="Приз и число победителей используются как значения по умолчанию в форме панели. Команда /розыгрыш быстрый использует расписание и условие буста отсюда и автоматически создаёт пять промокодов flamerust.gg по 50 ₽.">
           <div className="tiles group">
             <FieldRow icon="gift" label="Приз">
               <input type="text" name="quickPrize" defaultValue={s.quickPrize} maxLength={200} required style={{ width: 280 }} />

@@ -55,7 +55,7 @@ export function buildCommands(s: GiveawaySettings): RESTPostAPIChatInputApplicat
     .addSubcommand((c) =>
       c
         .setName("быстрый")
-        .setDescription(`${s.quickPrize} · ${s.quickWinners} поб. · в ${s.quickTime} - останется ввести промокоды`.slice(0, 100)),
+        .setDescription(`5 призов по 50 ₽ на flamerust.gg · итоги в ${s.quickTime} · промокоды создаются автоматически`),
     )
     .addSubcommand((c) => c.setName("завершить").setDescription("Подвести итоги досрочно").addIntegerOption(giveawayOption("Какой розыгрыш завершить")))
     .addSubcommand((c) =>

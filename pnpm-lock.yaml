@@ -17,6 +17,9 @@ importers:
       '@flamebot/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@napi-rs/canvas':
+        specifier: 1.0.11
+        version: 1.0.11
       discord.js:
         specifier: 14.27.0
         version: 14.27.0

@@ -4,6 +4,8 @@ import {
   ButtonBuilder,
   ButtonStyle,
   ChannelType,
+  ContainerBuilder,
+  TextDisplayBuilder,
   EmbedBuilder,
   MessageFlags,
   ModalBuilder,
@@ -40,24 +42,25 @@ import {
   zonedToDate,
   type GiveawayStatus,
 } from "@flamebot/core";
+import { QUICK_WINNERS, createQuickPromos } from "./balance-promos.js";
 import { COMMAND_NAME } from "./commands.js";
 import { config } from "./config.js";
 import { event, log } from "./events.js";
 import {
+  CLAIM_BUTTON_PREFIX,
   JOIN_BUTTON_ID,
   EMBED_COLOR,
   announce,
   assignPromos,
-  buildEmbed,
-  dirty,
   draw,
   finish,
   hasUndelivered,
-  joinRow,
   jumpUrl,
   loadGiveaway,
   missingPermissions,
   promoReport,
+  scheduleCountUpdate,
+  sendGiveaway,
   sendPromos,
   updateMessage,
 } from "./giveaways.js";
@@ -95,7 +98,8 @@ const ephemeral = MessageFlags.Ephemeral;
 
 async function error(interaction: RepliableInteraction, text: string) {
   const payload = { content: `⚠️ ${text}`, flags: ephemeral } as const;
-  if (interaction.deferred || interaction.replied) await interaction.followUp(payload);
+  if (interaction.deferred && !interaction.replied) await interaction.editReply({ content: payload.content });
+  else if (interaction.replied) await interaction.followUp(payload);
   else await interaction.reply(payload);
 }
 
@@ -141,7 +145,7 @@ async function checkChannel(interaction: RepliableInteraction<"cached">, target:
 }
 
 // Отправляет розыгрыш в канал. Вызывается сразу из команды или после окна с промокодами.
-async function publish(interaction: ChatInputCommandInteraction<"cached"> | ModalSubmitInteraction<"cached">, d: Draft, codes: string[]) {
+async function publish(interaction: ChatInputCommandInteraction<"cached"> | ModalSubmitInteraction<"cached">, d: Draft, codes: string[], queue = false) {
   const s = await getSettings();
   if (d.endsAt.getTime() <= Date.now()) {
     await error(interaction, "Пока вводились промокоды, время итогов уже прошло. Создай розыгрыш заново.");
@@ -150,7 +154,7 @@ async function publish(interaction: ChatInputCommandInteraction<"cached"> | Moda
   const channel = await checkChannel(interaction, interaction.guild.channels.cache.get(d.channelId) ?? null);
   if (!channel) return;
 
-  await interaction.deferReply({ flags: ephemeral });
+  if (!interaction.deferred) await interaction.deferReply({ flags: ephemeral });
   const created = await prisma.giveaway.create({
     data: {
       channelId: channel.id,
@@ -160,14 +164,19 @@ async function publish(interaction: ChatInputCommandInteraction<"cached"> | Moda
       winnersCount: d.winners,
       endsAt: d.endsAt,
       boostersOnly: d.boostersOnly,
+      needsPublish: queue,
       promoCodes: { create: codes.map((code) => ({ code })) },
     },
   });
+  if (queue) {
+    await interaction.editReply(`✅ Создано ${codes.length} промокодов. Розыгрыш **#${created.id}** появится в канале после публикации ботом.`);
+    return;
+  }
   const g = (await loadGiveaway({ id: created.id }))!;
 
   let messageUrl: string;
   try {
-    const message = await channel.send({ embeds: [buildEmbed(g, interaction.guild)], components: [joinRow()] });
+    const message = await sendGiveaway(channel, g);
     await prisma.giveaway.update({ where: { id: g.id }, data: { messageId: message.id } });
     messageUrl = message.url;
   } catch (err) {
@@ -237,16 +246,29 @@ async function quick(interaction: ChatInputCommandInteraction<"cached">) {
   if (endsAt.getTime() <= Date.now() + 60_000) {
     return error(interaction, `Время итогов быстрого розыгрыша (${formatInZone(endsAt, s.timezone)}) уже прошло. Поменяй его в панели или создай розыгрыш через «создать».`);
   }
-  const id = saveDraft({
-    hostId: interaction.user.id,
-    prize: s.quickPrize,
-    winners: s.quickWinners,
-    endsAt,
-    boostersOnly: s.quickBoostersOnly,
-    channelId: target.id,
-    description: null,
-  });
-  await interaction.showModal(promoModal(id, drafts.get(id)!));
+  await interaction.deferReply({ flags: ephemeral });
+  let codes: string[];
+  try {
+    codes = await createQuickPromos(endsAt);
+  } catch (err) {
+    await error(interaction, err instanceof Error ? err.message : "Не удалось создать промокоды flamerust.gg.");
+    return;
+  }
+  try {
+    await publish(interaction, {
+      hostId: interaction.user.id,
+      prize: "50 ₽ на баланс flamerust.gg",
+      winners: QUICK_WINNERS,
+      endsAt,
+      boostersOnly: s.quickBoostersOnly,
+      channelId: target.id,
+      description: null,
+      previous: "",
+      expiresAt: 0,
+    }, codes, true);
+  } catch {
+    await error(interaction, "Промокоды созданы. Проверь розыгрыш в панели и последние промокоды в магазине перед повтором команды.");
+  }
 }
 
 async function end(interaction: ChatInputCommandInteraction<"cached">) {
@@ -278,16 +300,17 @@ async function reroll(interaction: ChatInputCommandInteraction<"cached">) {
     if (fresh.length === 0) return null;
     await prisma.giveaway.update({ where: { id }, data: { winners: [...g.winners, ...fresh] } });
     // Новым победителям достаются невыданные промокоды и те, что не дошли прошлым победителям.
-    return { g, fresh, promos: await assignPromos(g, fresh, true) };
+    return { g, fresh, promos: await sendPromos(interaction.guild, g, await assignPromos(g, fresh, true)) };
   });
   if (!result) {
     await interaction.editReply("Выбрать некого - все подходящие участники уже побеждали.");
     return;
   }
 
-  const { g, fresh } = result;
-  const promos = await sendPromos(interaction.guild, g, result.promos);
-  await announce(interaction.guild, g, fresh, g.messageId, promos, true);
+  const { g, fresh, promos } = result;
+  const updated = (await loadGiveaway({ id })) ?? g;
+  const messageId = await updateMessage(interaction.guild, g.id);
+  await announce(interaction.guild, updated, fresh, messageId, promos, true);
   event("giveaway.reroll", `Реролл розыгрыша #${g.id} «${g.prize}»: ${fresh.length} ${plural(fresh.length, "новый победитель", "новых победителя", "новых победителей")}`, {
     memberId: interaction.user.id,
     details: { giveawayId: g.id, winners: fresh },
@@ -315,8 +338,7 @@ async function cancel(interaction: ChatInputCommandInteraction<"cached">) {
   });
   if (!g) return error(interaction, "Активный розыгрыш с таким номером не найден.");
   await interaction.deferReply({ flags: ephemeral });
-  await updateMessage(interaction.guild, g, true);
-  dirty.delete(g.id);
+  await updateMessage(interaction.guild, g.id);
   event("giveaway.cancelled", `Розыгрыш #${g.id} «${g.prize}» отменён`, { level: "WARN", memberId: interaction.user.id, details: { giveawayId: g.id } });
   await interaction.editReply(`❌ Розыгрыш **#${g.id}** (${escapeMarkdown(g.prize)}) отменён.`);
 }
@@ -394,9 +416,9 @@ async function join(interaction: ButtonInteraction<"cached">) {
     return;
   }
 
-  dirty.add(g.id);
+  scheduleCountUpdate(interaction.guild, g.id);
   let text = `✅ Ты участвуешь в розыгрыше **${prize}**! Итоги <t:${unix(g.endsAt)}:R>. Удачи!`;
-  if (g.hasPromo) text += "\n📩 Если победишь, промокод придёт в личные сообщения - проверь, что они открыты.";
+  if (g.hasPromo) text += "\n📩 Если победишь, промокод придёт в ЛС. Если ЛС закрыты, забери его кнопкой под итогами.";
   await interaction.reply({ content: text, flags: ephemeral });
 }
 
@@ -407,16 +429,59 @@ async function leave(interaction: ButtonInteraction<"cached">, id: number) {
     return;
   }
   await prisma.giveawayEntry.deleteMany({ where: { giveawayId: g.id, userId: interaction.user.id } });
-  dirty.add(g.id);
+  scheduleCountUpdate(interaction.guild, g.id);
   await interaction.update({ content: `Ты больше не участвуешь в розыгрыше **${escapeMarkdown(g.prize)}**.`, components: [] });
+}
+
+async function claim(interaction: ButtonInteraction<"cached">, id: number) {
+  if (!Number.isSafeInteger(id) || id < 1 || interaction.message.author.id !== interaction.client.user.id) return;
+  await interaction.deferReply({ flags: ephemeral });
+  try {
+    const result = await withLock(`giveaway:${id}`, async () => {
+      const g = await loadGiveaway({ id });
+      if (!g || g.channelId !== interaction.channelId || g.status !== "ENDED") return "Промокод этого розыгрыша недоступен.";
+      if (!g.winners.includes(interaction.user.id)) return "Ты не в списке победителей этого розыгрыша.";
+      const promo = await prisma.giveawayPromoCode.findFirst({
+        where: { giveawayId: id, userId: interaction.user.id },
+        orderBy: { id: "asc" },
+      });
+      if (!promo) return "За тобой сейчас не закреплён промокод. Обратись к организатору.";
+      if (!promo.claimedAt) {
+        await prisma.giveawayPromoCode.update({ where: { id: promo.id }, data: { claimedAt: new Date() } });
+      }
+      return { g, promo };
+    });
+    if (typeof result === "string") {
+      await interaction.editReply(result);
+      return;
+    }
+    const card = new ContainerBuilder().setAccentColor(0x707cff)
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(`## 🎉 Твой промокод\n${escapeMarkdown(result.g.prize)}`),
+        new TextDisplayBuilder().setContent(`**${escapeMarkdown(result.promo.code)}**`),
+      );
+    await interaction.editReply({ flags: MessageFlags.IsComponentsV2, components: [card], allowedMentions: { parse: [] } });
+    if (!result.promo.claimedAt) event("promo.claimed", `Промокод розыгрыша #${id} получен в канале`, {
+      memberId: interaction.user.id, details: { giveawayId: id },
+    });
+  } catch {
+    // Ошибка Discord может содержать тело запроса с кодом.
+    log.warn(`Не удалось показать победителю промокод розыгрыша #${id}`);
+    await interaction.editReply("Не удалось показать промокод. Нажми «Получить промокод» ещё раз.").catch(() => undefined);
+  }
 }
 
 async function resend(interaction: ButtonInteraction<"cached">, id: number) {
   const g = await loadGiveaway({ id });
   if (!g) return error(interaction, "Розыгрыш не найден.");
   await interaction.deferUpdate();
-  const undelivered = await prisma.giveawayPromoCode.findMany({ where: { giveawayId: id, userId: { not: null }, dmSent: false }, orderBy: { id: "asc" } });
-  await sendPromos(interaction.guild, g, undelivered);
+  await withLock(`giveaway:${id}`, async () => {
+    const undelivered = await prisma.giveawayPromoCode.findMany({
+      where: { giveawayId: id, userId: { not: null }, dmSent: false, claimedAt: null },
+      orderBy: { id: "asc" },
+    });
+    await sendPromos(interaction.guild, g, undelivered);
+  });
   await interaction.editReply({ content: await promoReport(g), components: await resendComponents(id) });
 }
 
@@ -580,7 +645,8 @@ export async function handleInteraction(interaction: Interaction): Promise<void>
     }
 
     if (interaction.isButton()) {
-      if (interaction.customId === JOIN_BUTTON_ID) return join(interaction);
+      if (interaction.customId === JOIN_BUTTON_ID) return await join(interaction);
+      if (interaction.customId.startsWith(CLAIM_BUTTON_PREFIX)) return await claim(interaction, Number(interaction.customId.slice(CLAIM_BUTTON_PREFIX.length)));
       const [, action, arg = ""] = interaction.customId.split(":");
       if (action === "leave") return leave(interaction, Number(arg));
       // Остальные кнопки — в ответах админу. Ответы и так видны только ему, но проверяем автора команды.
