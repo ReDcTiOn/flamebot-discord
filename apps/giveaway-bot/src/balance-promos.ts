@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
-import { config } from "./config.js";
+import { loadFlameRustKey } from "./secrets.js";
 
 export const QUICK_WINNERS = 5;
 const amount = 50;
@@ -8,8 +8,7 @@ const week = 7 * 24 * 60 * 60 * 1000;
 const responseSchema = z.object({ codes: z.array(z.string().min(1)).length(QUICK_WINNERS) });
 
 export async function createQuickPromos(endsAt: Date): Promise<string[]> {
-  const key = config.GIVEAWAY_FLAMERUST_API_KEY;
-  if (!key) throw new Error("На сервере не задан API-ключ flamerust.gg для бота розыгрышей.");
+  const key = await loadFlameRustKey();
   const prefix = `GIVE-${randomBytes(5).toString("hex").toUpperCase()}-`;
   let response: Response;
   try {

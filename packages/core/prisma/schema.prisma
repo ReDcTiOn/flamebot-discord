@@ -424,6 +424,14 @@ model GiveawayPromoCode {
   @@index([giveawayId])
 }
 
+// Ключи внешних сервисов бота розыгрышей. Расшифровываются только в боте.
+model GiveawaySecret {
+  name      String   @id
+  valueEnc  String
+  setAt     DateTime @default(now())
+  setByName String?
+}
+
 // ===================== Карты вайпов (модуль "maps") =====================
 // Бот заказывает карты на RustMaps под расписание вайпов, заливает выбранные в S3,
 // шлёт анонс в Discord и записывает ссылки в задачи вайпа Pterodactyl.

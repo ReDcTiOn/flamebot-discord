@@ -1,12 +1,9 @@
-import { join } from "node:path";
 import { Client, Events, GatewayIntentBits, Routes, type Guild } from "discord.js";
 import {
-  botDataDir,
   botTokenVersion,
   describeLoginError,
   isBotEnabled,
   loadBotToken,
-  loadOrCreateBotKey,
   prisma,
   publishBotKey,
   reportBotIdentity,
@@ -17,6 +14,7 @@ import { config } from "./config.js";
 import { BOT_KEY, event, log } from "./events.js";
 import { tick } from "./giveaways.js";
 import { handleInteraction } from "./handlers.js";
+import { getGiveawayBotKey } from "./secrets.js";
 import { getSettings } from "./util.js";
 
 // Процесс бота работает всегда, а подключение к Discord включается и выключается из панели
@@ -30,7 +28,7 @@ let commandsSignature = "";
 const timers: NodeJS.Timeout[] = [];
 
 // Ключ, которым панель шифрует токен. Лежит в томе бота, в базу попадает только открытая часть.
-const secretKey = loadOrCreateBotKey(join(botDataDir(), "secret.key"));
+const secretKey = getGiveawayBotKey();
 await publishBotKey(prisma, BOT_KEY, secretKey.publicKey);
 if (secretKey.source === "generated") log.info("Создан ключ шифрования токена в томе бота");
 

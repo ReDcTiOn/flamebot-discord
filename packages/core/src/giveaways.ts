@@ -5,6 +5,8 @@ import type { Db } from "./db.js";
 // Общие правила модуля «Розыгрыши»: разбор даты и времени, часовые пояса, проверка настроек.
 // Всё здесь без Discord, чтобы панель и бот считали одинаково.
 
+export const GIVEAWAY_FLAMERUST_KEY_CONTEXT = "bot:giveaway:flamerustApiKey";
+
 export const GIVEAWAY_MAX_WINNERS = 20;
 export const GIVEAWAY_MAX_DAYS = 365;
 
