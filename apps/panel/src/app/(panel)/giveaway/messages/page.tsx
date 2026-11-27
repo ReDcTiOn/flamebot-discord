@@ -32,7 +32,7 @@ export default async function GiveawayMessagesPage() {
                       ? <input id={key} name={key} className="wide" defaultValue={saved.text} maxLength={80} required />
                       : <textarea id={key} name={key} className="wide" defaultValue={saved.text} maxLength={1700} rows={key === "dm" ? 7 : 2} required />}
                     {vars.length > 0 && <div className="setting-hint">Подстановки {vars.map(v => <code key={v} style={{ marginLeft: 6 }}>{v}</code>)}</div>}
-                    {key === "everyone" && <div className="setting-hint">Отдельный ответ на карточку. Для пинга бот должен иметь право упоминать @everyone в канале.</div>}
+                    {key === "everyone" && <div className="setting-hint">Строка над карточкой в том же сообщении. Для пинга бот должен иметь право упоминать @everyone в канале.</div>}
                   </div>
                 );
               })}

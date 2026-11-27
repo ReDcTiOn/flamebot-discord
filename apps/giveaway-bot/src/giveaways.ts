@@ -64,7 +64,7 @@ function joinRow(label: string) {
   );
 }
 
-export async function buildGiveawayMessage(g: GiveawayFull, settings = undefined as Awaited<ReturnType<typeof getSettings>> | undefined) {
+export async function buildGiveawayMessage(g: GiveawayFull, settings?: Awaited<ReturnType<typeof getSettings>>, publish = false) {
   const cfg = settings ?? await getSettings();
   const m = (key: Parameters<typeof giveawayMessage>[1], vars?: Record<string, string | number>) => giveawayMessage(cfg, key, vars);
   const text = (content: string) => new TextDisplayBuilder().setContent(content);
@@ -107,32 +107,23 @@ export async function buildGiveawayMessage(g: GiveawayFull, settings = undefined
       }
     }
   }
+  const mention = g.status === "ACTIVE" ? m("everyone") : "";
   return {
     flags: MessageFlags.IsComponentsV2 as const,
-    components: [container],
+    components: mention ? [text(mention), container] : [container],
     files,
-    allowedMentions: { parse: [], repliedUser: false },
+    allowedMentions: { parse: publish && mention ? ["everyone" as const] : [], repliedUser: false },
   };
 }
 
 export async function sendGiveaway(channel: GuildTextBasedChannel, g: GiveawayFull) {
   const settings = await getSettings();
-  const message = await channel.send({ ...await buildGiveawayMessage(g, settings), nonce: `giveaway:${g.id}`, enforceNonce: true });
   const mention = giveawayMessage(settings, "everyone");
-  if (mention) {
-    const member = channel.guild.members.me;
-    if (member && !channel.permissionsFor(member)?.has(PermissionFlagsBits.MentionEveryone) && /@(everyone|here)\b/.test(mention)) {
-      log.warn(`Боту не хватает права «Упоминание @everyone» для розыгрыша #${g.id}`);
-    }
-    await channel.send({
-      content: mention,
-      reply: { messageReference: message.id, failIfNotExists: false },
-      allowedMentions: { parse: ["everyone"], repliedUser: false },
-      nonce: `giveaway-ping:${g.id}`,
-      enforceNonce: true,
-    }).catch(() => log.warn(`Не удалось отправить уведомление о розыгрыше #${g.id}`));
+  const member = channel.guild.members.me;
+  if (member && /@(everyone|here)\b/.test(mention) && !channel.permissionsFor(member)?.has(PermissionFlagsBits.MentionEveryone)) {
+    log.warn(`Боту не хватает права «Упоминание @everyone» для розыгрыша #${g.id}`);
   }
-  return message;
+  return channel.send({ ...await buildGiveawayMessage(g, settings, true), nonce: `giveaway:${g.id}`, enforceNonce: true });
 }
 
 const isCode = (err: unknown, code: number) => err instanceof DiscordAPIError && err.code === code;
