@@ -6,6 +6,8 @@ import { z } from "zod";
 import {
   GIVEAWAY_MAX_DAYS,
   GIVEAWAY_MESSAGES,
+  giveawayMessageLength,
+  giveawayMessageSupportsEmbed,
   type GiveawayMessageKey,
   GIVEAWAY_MAX_WINNERS,
   GIVEAWAY_REPEAT_OPTIONS,
@@ -162,13 +164,25 @@ export async function saveGiveawaySettings(_prev: ActionResult, fd: FormData): P
 
 export async function saveGiveawayMessages(_prev: ActionResult, fd: FormData): Promise<ActionResult> {
   return runAction("full", async (user) => {
-    const messages: Record<string, { text: string; enabled: boolean }> = {};
+    const messages: Record<string, { text: string; enabled: boolean; format?: "plain" | "embed"; title?: string; color?: string; footer?: string }> = {};
     for (const key of Object.keys(GIVEAWAY_MESSAGES) as GiveawayMessageKey[]) {
       const def = GIVEAWAY_MESSAGES[key];
       const text = str(fd, key).replace(/\r\n/g, "\n").trim();
-      if (!text || text.length > (key.endsWith("Button") ? 80 : 1700)) throw new ActionError(`Проверь длину поля «${def.label}»`);
+      if (!text || text.length > giveawayMessageLength(key)) throw new ActionError(`Проверь длину поля «${def.label}»`);
       if ((key === "dm" || key === "claim") && !text.includes("{code}")) throw new ActionError(`Добавь {code} в поле «${def.label}»`);
-      messages[key] = { text, enabled: !def.optional || bool(fd, `${key}Enabled`) };
+      const enabled = !def.optional || bool(fd, `${key}Enabled`);
+      if (!giveawayMessageSupportsEmbed(key)) {
+        messages[key] = { text, enabled };
+        continue;
+      }
+      const format = str(fd, `${key}Format`) === "embed" ? "embed" : "plain";
+      const title = str(fd, `${key}Title`).trim();
+      const footer = str(fd, `${key}Footer`).trim();
+      const color = str(fd, `${key}Color`) || "#ff5a1f";
+      if (title.length > 256 || footer.length > 256 || !/^#[0-9a-f]{6}$/i.test(color)) {
+        throw new ActionError(`Проверь заголовок, подпись и цвет Embed в поле «${def.label}»`);
+      }
+      messages[key] = { text, enabled, format, title, color, footer };
     }
     await prisma.$transaction([
       prisma.giveawaySettings.upsert({ where: { id: 1 }, create: { id: 1, messages }, update: { messages } }),

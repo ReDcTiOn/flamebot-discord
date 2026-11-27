@@ -1,8 +1,9 @@
-import { GIVEAWAY_MESSAGES, getGiveawaySettings, giveawayMessageConfig, prisma, type GiveawayMessageKey } from "@flamebot/core";
+import { GIVEAWAY_MESSAGES, getGiveawaySettings, giveawayMessageConfig, giveawayMessageLength, giveawayMessageSupportsEmbed, prisma, type GiveawayMessageKey } from "@flamebot/core";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { PageHead, Section, Switch } from "@/components/Fields";
 import { requirePage } from "@/lib/auth";
 import { saveGiveawayMessages } from "../actions";
+import { MessageEditor } from "./MessageEditor";
 
 export const metadata = { title: "Сообщения розыгрышей" };
 
@@ -15,6 +16,18 @@ export default async function GiveawayMessagesPage() {
   return (
     <>
       <PageHead title="Сообщения" hint="Настрой тексты карточки розыгрыша, ответы в Discord и уведомления. Переменные в фигурных скобках бот подставляет сам." />
+      <Section title="Форматирование Discord">
+        <details className="setting-body">
+          <summary>Примеры Markdown</summary>
+          <ul>
+            <li><code>**жирный**</code>, <code>*курсив*</code>, <code>__подчёркивание__</code></li>
+            <li><code>-# Мелкий текст</code> в начале строки. После <code>#</code> нужен пробел.</li>
+            <li><code>## Заголовок</code> или <code>- Пункт списка</code> в начале строки.</li>
+            <li><code>||спойлер||</code>, <code>`код`</code>, <code>[ссылка](https://flamerust.gg)</code></li>
+          </ul>
+          <p>У кнопок форматирование не применяется. Для текстовых блоков внутри карточки используется разметка Components V2.</p>
+        </details>
+      </Section>
       <ActionForm action={saveGiveawayMessages}>
         {groups.map(group => (
           <Section key={group} title={group}>
@@ -30,7 +43,7 @@ export default async function GiveawayMessagesPage() {
                     {def.optional && <Switch name={`${key}Enabled`} defaultChecked={saved.enabled} label={`Включить: ${def.label}`} />}
                     {button
                       ? <input id={key} name={key} className="wide" defaultValue={saved.text} maxLength={80} required />
-                      : <textarea id={key} name={key} className="wide" defaultValue={saved.text} maxLength={1700} rows={key === "dm" ? 7 : 2} required />}
+                      : <MessageEditor field={key} label={def.label} saved={saved} canEmbed={giveawayMessageSupportsEmbed(key)} maxLength={giveawayMessageLength(key)} rows={key === "dm" ? 7 : 2} />}
                     {vars.length > 0 && <div className="setting-hint">Подстановки {vars.map(v => <code key={v} style={{ marginLeft: 6 }}>{v}</code>)}</div>}
                     {key === "everyone" && <div className="setting-hint">Строка над карточкой в том же сообщении. Для пинга бот должен иметь право упоминать @everyone в канале.</div>}
                   </div>

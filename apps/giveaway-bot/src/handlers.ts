@@ -66,6 +66,7 @@ import {
   sendPromos,
   updateMessage,
 } from "./giveaways.js";
+import { giveawayPayload } from "./message-format.js";
 import { RateLimiter, getSettings, mentions, unix, withLock } from "./util.js";
 
 async function msg(key: GiveawayMessageKey, vars?: Record<string, string | number>) {
@@ -285,7 +286,8 @@ async function end(interaction: ChatInputCommandInteraction<"cached">) {
   await interaction.deferReply({ flags: ephemeral });
   const done = await finish(interaction.guild, g.id, { notifyHost: false, byId: interaction.user.id });
   if (!done) {
-    await interaction.editReply(await msg("closed"));
+    const settings = await getSettings();
+    await interaction.editReply({ ...giveawayPayload(settings, "closed", giveawayMessage(settings, "closed")), allowedMentions: { parse: [] } });
     return;
   }
   let text = await msg("adminEnded", { id: done.id, winners: mentions(done.winners) || await msg("noWinners") });
@@ -392,18 +394,22 @@ const SUBCOMMANDS: Record<string, (i: ChatInputCommandInteraction<"cached">) => 
 
 async function join(interaction: ButtonInteraction<"cached">) {
   const settings = await getSettings();
+  const payload = (key: GiveawayMessageKey, vars?: Record<string, string | number>) => ({
+    ...giveawayPayload(settings, key, giveawayMessage(settings, key, vars), vars),
+    allowedMentions: { parse: [] as [] },
+  });
   const g = await loadGiveaway({ messageId: interaction.message.id });
   if (!g || g.status !== "ACTIVE") {
-    await interaction.reply({ content: giveawayMessage(settings, "closed"), flags: ephemeral });
+    await interaction.reply({ ...payload("closed"), flags: ephemeral });
     return;
   }
   if (g.endsAt.getTime() <= Date.now()) {
-    await interaction.reply({ content: giveawayMessage(settings, "drawing"), flags: ephemeral });
+    await interaction.reply({ ...payload("drawing"), flags: ephemeral });
     return;
   }
   if (g.boostersOnly && !interaction.member.premiumSince) {
     await interaction.reply({
-      content: giveawayMessage(settings, "needBoost", { server: escapeMarkdown(interaction.guild.name) }),
+      ...payload("needBoost", { server: escapeMarkdown(interaction.guild.name) }),
       flags: ephemeral,
     });
     return;
@@ -413,7 +419,7 @@ async function join(interaction: ButtonInteraction<"cached">) {
   const { count } = await prisma.giveawayEntry.createMany({ data: [{ giveawayId: g.id, userId: interaction.user.id }], skipDuplicates: true });
   if (count === 0) {
     await interaction.reply({
-      content: giveawayMessage(settings, "already", vars),
+      ...payload("already", vars),
       components: [
         new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
           new ButtonBuilder().setCustomId(`giveaway:leave:${g.id}`).setLabel(giveawayMessage(settings, "leaveButton")).setStyle(ButtonStyle.Danger),
@@ -426,18 +432,24 @@ async function join(interaction: ButtonInteraction<"cached">) {
 
   scheduleCountUpdate(interaction.guild, g.id);
   const text = [giveawayMessage(settings, "joined", vars), g.hasPromo ? giveawayMessage(settings, "joinedPromo") : ""].filter(Boolean).join("\n");
-  await interaction.reply({ content: text.slice(0, 2000), flags: ephemeral, allowedMentions: { parse: [] } });
+  await interaction.reply({ ...giveawayPayload(settings, "joined", text, vars), flags: ephemeral, allowedMentions: { parse: [] } });
 }
 
 async function leave(interaction: ButtonInteraction<"cached">, id: number) {
+  const settings = await getSettings();
   const g = await loadGiveaway({ id });
   if (!g || g.status !== "ACTIVE") {
-    await interaction.update({ content: await msg("closed"), components: [] });
+    await interaction.update({ content: null, embeds: [], ...giveawayPayload(settings, "closed", giveawayMessage(settings, "closed")), components: [], allowedMentions: { parse: [] } });
     return;
   }
   await prisma.giveawayEntry.deleteMany({ where: { giveawayId: g.id, userId: interaction.user.id } });
   scheduleCountUpdate(interaction.guild, g.id);
-  await interaction.update({ content: await msg("left", { prize: escapeMarkdown(g.prize) }), components: [] });
+  const vars = { prize: escapeMarkdown(g.prize) };
+  await interaction.update({
+    content: null, embeds: [], components: [],
+    ...giveawayPayload(settings, "left", giveawayMessage(settings, "left", vars), vars),
+    allowedMentions: { parse: [] },
+  });
 }
 
 async function claim(interaction: ButtonInteraction<"cached">, id: number) {

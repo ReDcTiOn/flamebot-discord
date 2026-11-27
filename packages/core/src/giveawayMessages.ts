@@ -70,6 +70,14 @@ export const GIVEAWAY_MESSAGES = {
 export type GiveawayMessageKey = keyof typeof GIVEAWAY_MESSAGES;
 export type GiveawayMessageSettings = { messages: unknown; promoDmText: string };
 
+export function giveawayMessageSupportsEmbed(key: GiveawayMessageKey): boolean {
+  return ["congrats", "reroll", "empty", "dm", "organizer", "joined", "already", "closed", "drawing", "needBoost", "left"].includes(key);
+}
+
+export function giveawayMessageLength(key: GiveawayMessageKey): number {
+  return key.endsWith("Button") ? 80 : key === "listTitle" ? 256 : 1700;
+}
+
 export function giveawayMessageConfig(settings: GiveawayMessageSettings, key: GiveawayMessageKey) {
   const def = GIVEAWAY_MESSAGES[key];
   const raw = settings.messages && typeof settings.messages === "object"
@@ -78,6 +86,10 @@ export function giveawayMessageConfig(settings: GiveawayMessageSettings, key: Gi
   return {
     text: typeof saved?.text === "string" && saved.text.trim() ? saved.text : key === "dm" ? settings.promoDmText : def.text,
     enabled: !def.optional || saved?.enabled !== false,
+    format: giveawayMessageSupportsEmbed(key) && saved?.format === "embed" ? "embed" as const : "plain" as const,
+    title: typeof saved?.title === "string" ? saved.title.slice(0, 256) : "",
+    color: typeof saved?.color === "string" && /^#[0-9a-f]{6}$/i.test(saved.color) ? saved.color : "#ff5a1f",
+    footer: typeof saved?.footer === "string" ? saved.footer.slice(0, 256) : "",
   };
 }
 

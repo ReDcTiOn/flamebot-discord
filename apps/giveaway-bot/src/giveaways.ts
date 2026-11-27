@@ -24,6 +24,7 @@ import { formatInZone, giveawayMessage, giveawayMessageConfig, nextGiveawayStart
 import { createScheduledPromos, promoRetry } from "./balance-promos.js";
 import { renderBanner } from "./banner.js";
 import { event, log } from "./events.js";
+import { giveawayPayload } from "./message-format.js";
 import { getSettings, mentions, unix, withLock } from "./util.js";
 
 export const JOIN_BUTTON_ID = "giveaway:join";
@@ -223,10 +224,13 @@ export async function assignPromos(g: GiveawayFull, winners: string[], reuseUnde
 }
 
 async function sendPromoDm(guild: Guild, g: Giveaway, promo: GiveawayPromoCode): Promise<boolean> {
-  const text = giveawayMessage(await getSettings(), "dm", { prize: g.prize, code: escapeMarkdown(promo.code) });
+  const settings = await getSettings();
+  const vars = { prize: escapeMarkdown(g.prize), code: escapeMarkdown(promo.code) };
+  const text = giveawayMessage(settings, "dm", vars);
+  if (!text) return false;
   try {
     const user = await guild.client.users.fetch(promo.userId!);
-    await user.send({ content: text, flags: MessageFlags.SuppressEmbeds, allowedMentions: { parse: [] } });
+    await user.send({ ...giveawayPayload(settings, "dm", text, vars), flags: MessageFlags.SuppressEmbeds, allowedMentions: { parse: [] } });
     return true;
   } catch {
     log.warn(`Не удалось отправить промокод в ЛС пользователю ${promo.userId}`);
@@ -271,7 +275,7 @@ export async function promoReport(g: Giveaway): Promise<string> {
 async function reportToHost(guild: Guild, g: Giveaway): Promise<void> {
   try {
     const host = await guild.client.users.fetch(g.hostId);
-    await host.send({ content: await promoReport(g), allowedMentions: { parse: [] } });
+    await host.send({ ...giveawayPayload(await getSettings(), "organizer", await promoReport(g), { prize: escapeMarkdown(g.prize), id: g.id }), allowedMentions: { parse: [] } });
   } catch (err) {
     log.warn(`Не удалось отправить отчёт по промокодам организатору розыгрыша #${g.id}`, err);
   }
@@ -291,22 +295,26 @@ export async function announce(
   if (!channel) return;
   const settings = await getSettings();
   const vars = { prize: escapeMarkdown(g.prize), winners: mentions(winners) };
+  const key = reroll ? "reroll" : winners.length ? "congrats" : "empty";
   const delivered = promos.filter(p => p.dmSent);
   const failed = promos.filter(p => !p.dmSent).map(p => p.userId!);
   const text = [
-    giveawayMessage(settings, reroll ? "reroll" : winners.length ? "congrats" : "empty", vars),
+    giveawayMessage(settings, key, vars),
     !reroll && winners.length > 0 && winners.length < g.winnersCount ? giveawayMessage(settings, "shortage") : "",
     delivered.length ? giveawayMessage(settings, "delivered") : "",
     failed.length ? giveawayMessage(settings, "failed", { winners: mentions(failed) }) : "",
-  ].filter(Boolean).join("\n").slice(0, 2000);
+  ].filter(Boolean).join("\n");
 
   try {
     if (!replyTo) {
       await channel.send(await buildGiveawayMessage(g));
     }
     if (!text) return;
+    const member = channel.guild.members.me;
+    const canEmbed = !member || !!channel.permissionsFor(member)?.has(PermissionFlagsBits.EmbedLinks);
+    const mentioned = winners.filter(id => text.includes(`<@${id}>`));
     await channel.send({
-      content: text,
+      ...giveawayPayload(settings, key, text, vars, { canEmbed, mentionText: mentions(mentioned) || undefined }),
       reply: replyTo ? { messageReference: replyTo, failIfNotExists: false } : undefined,
       allowedMentions: { parse: [], users: winners, roles: [], repliedUser: false },
     });
