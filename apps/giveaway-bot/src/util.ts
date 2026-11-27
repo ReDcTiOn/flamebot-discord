@@ -4,8 +4,8 @@ import { getGiveawaySettings, prisma, type GiveawaySettings } from "@flamebot/co
 const TTL_MS = 15_000;
 let cache: { settings: GiveawaySettings; at: number } | null = null;
 
-export async function getSettings(): Promise<GiveawaySettings> {
-  if (cache && Date.now() - cache.at < TTL_MS) return cache.settings;
+export async function getSettings(fresh = false): Promise<GiveawaySettings> {
+  if (!fresh && cache && Date.now() - cache.at < TTL_MS) return cache.settings;
   const settings = await getGiveawaySettings(prisma);
   cache = { settings, at: Date.now() };
   return settings;

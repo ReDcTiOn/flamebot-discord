@@ -70,6 +70,7 @@ export * from "./secrets.js";
 export * from "./online.js";
 export * from "./control.js";
 export * from "./giveaways.js";
+export * from "./giveawayMessages.js";
 export * from "./link.js";
 export * from "./maps.js";
 export * from "./mapsScoring.js";

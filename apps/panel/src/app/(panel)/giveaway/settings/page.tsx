@@ -53,22 +53,6 @@ export default async function GiveawaySettingsPage() {
           </div>
         </Section>
 
-        <Section title="Сообщение победителю" hint="Приходит в личные сообщения вместе с промокодом. Поддерживается разметка Discord: **жирный**, [ссылка](https://…).">
-          <div className="setting" style={{ flexDirection: "column", alignItems: "stretch", gap: 10 }}>
-            <textarea name="promoDmText" defaultValue={s.promoDmText} maxLength={1700} required className="wide" rows={10} aria-label="Сообщение победителю" />
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {[
-                ["{prize}", "название приза"],
-                ["{code}", "промокод — обязательно"],
-              ].map(([key, label]) => (
-                <span key={key} className="chip">
-                  <code style={{ background: "none", padding: 0 }}>{key}</code> {label}
-                </span>
-              ))}
-            </div>
-          </div>
-        </Section>
-
         <Section title="Настройки новых розыгрышей" hint="Приз и число победителей используются как значения по умолчанию в форме панели. Команда /розыгрыш быстрый использует расписание и условие буста отсюда и автоматически создаёт пять промокодов flamerust.gg по 50 ₽.">
           <div className="tiles group">
             <FieldRow icon="gift" label="Приз">

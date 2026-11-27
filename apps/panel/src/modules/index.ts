@@ -154,6 +154,7 @@ export const modules: PanelModule[] = [
         title: "Настройки",
         items: [
           { href: "/giveaway/settings", label: "Настройки", icon: "layers" },
+          { href: "/giveaway/messages", label: "Сообщения", icon: "message", fullOnly: true },
           { href: "/giveaway/connection", label: "Подключение", icon: "plug", fullOnly: true },
         ],
       },

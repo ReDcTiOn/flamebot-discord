@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import {
   GIVEAWAY_MAX_DAYS,
+  GIVEAWAY_MESSAGES,
+  type GiveawayMessageKey,
   GIVEAWAY_MAX_WINNERS,
   GIVEAWAY_REPEAT_OPTIONS,
   formatInZone,
@@ -138,11 +140,11 @@ export async function createGiveaway(_prev: ActionResult, fd: FormData): Promise
 
 export async function saveGiveawaySettings(_prev: ActionResult, fd: FormData): Promise<ActionResult> {
   return runAction("any", async (user) => {
+    const settings = await getGiveawaySettings(prisma);
     const data = giveawaySettingsSchema.parse({
       timezone: str(fd, "timezone"),
       timezoneLabel: str(fd, "timezoneLabel"),
-      // Переводы строк из браузера приходят как \r\n, в Discord они не нужны.
-      promoDmText: str(fd, "promoDmText").replace(/\r\n/g, "\n"),
+      promoDmText: settings.promoDmText,
       quickPrize: str(fd, "quickPrize"),
       quickWinners: int(fd, "quickWinners"),
       quickDaysAhead: int(fd, "quickDaysAhead"),
@@ -155,6 +157,26 @@ export async function saveGiveawaySettings(_prev: ActionResult, fd: FormData): P
     await audit(user, MODULE, "giveaway.settings", null, { ...data, promoDmText: `${data.promoDmText.length} символов` });
     revalidatePath("/giveaway", "layout");
     return "Настройки сохранены. Бот применит их в течение 15 секунд, подсказки команды в Discord обновятся в течение минуты.";
+  });
+}
+
+export async function saveGiveawayMessages(_prev: ActionResult, fd: FormData): Promise<ActionResult> {
+  return runAction("full", async (user) => {
+    const messages: Record<string, { text: string; enabled: boolean }> = {};
+    for (const key of Object.keys(GIVEAWAY_MESSAGES) as GiveawayMessageKey[]) {
+      const def = GIVEAWAY_MESSAGES[key];
+      const text = str(fd, key).replace(/\r\n/g, "\n").trim();
+      if (!text || text.length > (key.endsWith("Button") ? 80 : 1700)) throw new ActionError(`Проверь длину поля «${def.label}»`);
+      if ((key === "dm" || key === "claim") && !text.includes("{code}")) throw new ActionError(`Добавь {code} в поле «${def.label}»`);
+      messages[key] = { text, enabled: !def.optional || bool(fd, `${key}Enabled`) };
+    }
+    await prisma.$transaction([
+      prisma.giveawaySettings.upsert({ where: { id: 1 }, create: { id: 1, messages }, update: { messages } }),
+      prisma.giveaway.updateMany({ where: { status: "ACTIVE", messageId: { not: null } }, data: { needsMessageUpdate: true } }),
+    ]);
+    await audit(user, MODULE, "giveaway.messages", "Обновлены шаблоны Discord");
+    revalidatePath("/giveaway/messages");
+    return "Сообщения сохранены. Бот обновит карточки активных розыгрышей.";
   });
 }
 

@@ -20,7 +20,7 @@ import {
   type GuildTextBasedChannel,
   type MessageActionRowComponentBuilder,
 } from "discord.js";
-import { formatInZone, nextGiveawayStart, plural, prisma, renderTemplate, type Giveaway, type GiveawayPromoCode } from "@flamebot/core";
+import { formatInZone, giveawayMessage, giveawayMessageConfig, nextGiveawayStart, plural, prisma, renderTemplate, type Giveaway, type GiveawayPromoCode } from "@flamebot/core";
 import { createScheduledPromos, promoRetry } from "./balance-promos.js";
 import { renderBanner } from "./banner.js";
 import { event, log } from "./events.js";
@@ -58,46 +58,51 @@ export async function loadGiveaway(where: { id: number } | { messageId: string }
 
 export const jumpUrl = (guildId: string, g: Giveaway) => `https://discord.com/channels/${guildId}/${g.channelId}/${g.messageId}`;
 
-function joinRow() {
+function joinRow(label: string) {
   return new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-    new ButtonBuilder().setCustomId(JOIN_BUTTON_ID).setLabel("Участвовать").setEmoji("🎉").setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(JOIN_BUTTON_ID).setLabel(label).setEmoji("🎉").setStyle(ButtonStyle.Primary),
   );
 }
 
-export async function buildGiveawayMessage(g: GiveawayFull, publish = false) {
+export async function buildGiveawayMessage(g: GiveawayFull, settings = undefined as Awaited<ReturnType<typeof getSettings>> | undefined) {
+  const cfg = settings ?? await getSettings();
+  const m = (key: Parameters<typeof giveawayMessage>[1], vars?: Record<string, string | number>) => giveawayMessage(cfg, key, vars);
   const text = (content: string) => new TextDisplayBuilder().setContent(content);
   const container = new ContainerBuilder().setAccentColor(
     g.status === "ACTIVE" ? EMBED_COLOR : g.status === "ENDED" ? 0x68cb9a : Colors.Red,
   );
   const files: AttachmentBuilder[] = [];
   if (g.status === "CANCELLED") {
-    container.addTextDisplayComponents(text(`## Розыгрыш отменён\n${escapeMarkdown(g.prize)}`));
+    container.addTextDisplayComponents(text(m("cancelled", { prize: escapeMarkdown(g.prize) })));
   } else {
-    const alt = `${g.prize}. Участников: ${g.entryCount}. ${g.winnersCount} ${plural(g.winnersCount, "приз", "приза", "призов")}.`.slice(0, 1024);
     const filename = "giveaway.png";
-    files.push(new AttachmentBuilder(await renderBanner(g), { name: filename, description: alt }));
-    if (g.status === "ACTIVE") container.addTextDisplayComponents(text("||@everyone||"));
+    files.push(new AttachmentBuilder(await renderBanner(g), { name: filename }));
     container.addMediaGalleryComponents(new MediaGalleryBuilder().addItems(
-      new MediaGalleryItemBuilder().setURL(`attachment://${filename}`).setDescription(alt),
+      new MediaGalleryItemBuilder().setURL(`attachment://${filename}`),
     ));
     if (g.description?.trim()) container.addTextDisplayComponents(text(g.description.slice(0, 1500).replace(/@(everyone|here)/g, "@\u200b$1")));
     container.addSeparatorComponents(new SeparatorBuilder());
 
     if (g.status === "ACTIVE") {
       const ends = unix(g.endsAt);
-      const details = [`⏳ **Итоги** · <t:${ends}:F> · <t:${ends}:R>`];
-      if (g.boostersOnly) details.push("🚀 Участвовать могут только бустеры сервера.");
-      if (g.hasPromo) details.push("🎟 Победители получат промокод в ЛС или смогут забрать его здесь после итогов.");
-      container.addTextDisplayComponents(text(details.join("\n"))).addActionRowComponents(joinRow());
+      const details = [
+        m("endTime", { time: `<t:${ends}:F>`, relative: `<t:${ends}:R>` }),
+        g.boostersOnly ? m("boosters") : "",
+        g.hasPromo ? m("promoHint") : "",
+      ].filter(Boolean).join("\n");
+      if (details) container.addTextDisplayComponents(text(details));
+      container.addActionRowComponents(joinRow(m("joinButton")));
     } else {
       const names = mentions(g.winners.slice(0, 40));
       const remaining = g.winners.length - 40;
-      container.addTextDisplayComponents(text(`**🏆 Победители**\n${names || "Победителей нет."}${remaining > 0 ? ` и ещё ${remaining}` : ""}`));
+      container.addTextDisplayComponents(text(m("winners", {
+        winners: (names || m("noWinners")) + (remaining > 0 ? m("moreWinners", { count: remaining }) : ""),
+      })));
       if (g.hasPromo && g.winners.length > 0) {
-        container.addSeparatorComponents(new SeparatorBuilder())
-          .addTextDisplayComponents(text("Промокод не пришёл в ЛС? Забери его здесь."))
-          .addActionRowComponents(new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-            new ButtonBuilder().setCustomId(`${CLAIM_BUTTON_PREFIX}${g.id}`).setLabel("Получить промокод").setEmoji("🎟").setStyle(ButtonStyle.Primary),
+        const hint = m("claimHint");
+        if (hint) container.addSeparatorComponents(new SeparatorBuilder()).addTextDisplayComponents(text(hint));
+        container          .addActionRowComponents(new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+            new ButtonBuilder().setCustomId(`${CLAIM_BUTTON_PREFIX}${g.id}`).setLabel(m("claimButton")).setEmoji("🎟").setStyle(ButtonStyle.Primary),
           ));
       }
     }
@@ -106,12 +111,28 @@ export async function buildGiveawayMessage(g: GiveawayFull, publish = false) {
     flags: MessageFlags.IsComponentsV2 as const,
     components: [container],
     files,
-    allowedMentions: { parse: publish && g.status === "ACTIVE" ? ["everyone" as const] : [], repliedUser: false },
+    allowedMentions: { parse: [], repliedUser: false },
   };
 }
 
 export async function sendGiveaway(channel: GuildTextBasedChannel, g: GiveawayFull) {
-  return channel.send({ ...await buildGiveawayMessage(g, true), nonce: `giveaway:${g.id}`, enforceNonce: true });
+  const settings = await getSettings();
+  const message = await channel.send({ ...await buildGiveawayMessage(g, settings), nonce: `giveaway:${g.id}`, enforceNonce: true });
+  const mention = giveawayMessage(settings, "everyone");
+  if (mention) {
+    const member = channel.guild.members.me;
+    if (member && !channel.permissionsFor(member)?.has(PermissionFlagsBits.MentionEveryone) && /@(everyone|here)\b/.test(mention)) {
+      log.warn(`Боту не хватает права «Упоминание @everyone» для розыгрыша #${g.id}`);
+    }
+    await channel.send({
+      content: mention,
+      reply: { messageReference: message.id, failIfNotExists: false },
+      allowedMentions: { parse: ["everyone"], repliedUser: false },
+      nonce: `giveaway-ping:${g.id}`,
+      enforceNonce: true,
+    }).catch(() => log.warn(`Не удалось отправить уведомление о розыгрыше #${g.id}`));
+  }
+  return message;
 }
 
 const isCode = (err: unknown, code: number) => err instanceof DiscordAPIError && err.code === code;
@@ -211,8 +232,7 @@ export async function assignPromos(g: GiveawayFull, winners: string[], reuseUnde
 }
 
 async function sendPromoDm(guild: Guild, g: Giveaway, promo: GiveawayPromoCode): Promise<boolean> {
-  const { promoDmText } = await getSettings();
-  const text = renderTemplate(promoDmText, { prize: g.prize, code: escapeMarkdown(promo.code) }).slice(0, 2000);
+  const text = giveawayMessage(await getSettings(), "dm", { prize: g.prize, code: escapeMarkdown(promo.code) });
   try {
     const user = await guild.client.users.fetch(promo.userId!);
     await user.send({ content: text, flags: MessageFlags.SuppressEmbeds, allowedMentions: { parse: [] } });
@@ -224,6 +244,7 @@ async function sendPromoDm(guild: Guild, g: Giveaway, promo: GiveawayPromoCode):
 }
 
 export async function sendPromos(guild: Guild, g: Giveaway, promos: GiveawayPromoCode[]): Promise<GiveawayPromoCode[]> {
+  if (!giveawayMessage(await getSettings(), "dm")) return [];
   const result: GiveawayPromoCode[] = [];
   for (const promo of promos) {
     const sent = await sendPromoDm(guild, g, promo);
@@ -236,13 +257,15 @@ export async function sendPromos(guild: Guild, g: Giveaway, promos: GiveawayProm
 }
 
 export async function hasUndelivered(giveawayId: number): Promise<boolean> {
+  if (!giveawayMessageConfig(await getSettings(), "dm").enabled) return false;
   return (await prisma.giveawayPromoCode.count({ where: { giveawayId, userId: { not: null }, dmSent: false, claimedAt: null } })) > 0;
 }
 
 // Кому какой промокод достался — видит только администрация.
 export async function promoReport(g: Giveaway): Promise<string> {
   const codes = await prisma.giveawayPromoCode.findMany({ where: { giveawayId: g.id }, orderBy: { id: "asc" } });
-  const lines = [`📋 Промокоды розыгрыша **${escapeMarkdown(g.prize)}** (#${g.id}):`];
+  const settings = await getSettings();
+  const lines = [renderTemplate(giveawayMessageConfig(settings, "organizer").text, { prize: escapeMarkdown(g.prize), id: g.id })];
   const unused: string[] = [];
   for (const p of codes) {
     if (p.userId === null) unused.push(`\`${p.code}\``);
@@ -257,7 +280,7 @@ export async function promoReport(g: Giveaway): Promise<string> {
 async function reportToHost(guild: Guild, g: Giveaway): Promise<void> {
   try {
     const host = await guild.client.users.fetch(g.hostId);
-    await host.send(await promoReport(g));
+    await host.send({ content: await promoReport(g), allowedMentions: { parse: [] } });
   } catch (err) {
     log.warn(`Не удалось отправить отчёт по промокодам организатору розыгрыша #${g.id}`, err);
   }
@@ -275,29 +298,22 @@ export async function announce(
 ): Promise<void> {
   const channel = await resolveChannel(guild, g.channelId);
   if (!channel) return;
-  const prize = escapeMarkdown(g.prize);
-
-  let text: string;
-  if (reroll) {
-    text = `🔁 Перевыбор в розыгрыше **${prize}**!\n${winners.length === 1 ? "Новый победитель" : "Новые победители"}: ${mentions(winners)}`;
-  } else if (winners.length > 0) {
-    text = `🎉 Поздравляем ${mentions(winners)} с победой в розыгрыше **${prize}**!`;
-    if (winners.length < g.winnersCount) text += "\n-# Участников хватило не на все призы.";
-  } else {
-    text = `😔 Розыгрыш **${prize}** завершён, но победителей нет - не хватило участников.`;
-  }
-
-  const delivered = promos.filter((p) => p.dmSent);
-  const failed = promos.filter((p) => !p.dmSent).map((p) => p.userId!);
-  if (delivered.length > 0) text += `\n📩 ${delivered.length === 1 ? "Промокод отправлен" : "Промокоды отправлены"} в личные сообщения.`;
-  if (failed.length > 0) {
-    text += `\n⚠️ ${mentions(failed)}, не получилось отправить промокод - у тебя закрыты ЛС. Нажми «Получить промокод» в карточке розыгрыша.`;
-  }
+  const settings = await getSettings();
+  const vars = { prize: escapeMarkdown(g.prize), winners: mentions(winners) };
+  const delivered = promos.filter(p => p.dmSent);
+  const failed = promos.filter(p => !p.dmSent).map(p => p.userId!);
+  const text = [
+    giveawayMessage(settings, reroll ? "reroll" : winners.length ? "congrats" : "empty", vars),
+    !reroll && winners.length > 0 && winners.length < g.winnersCount ? giveawayMessage(settings, "shortage") : "",
+    delivered.length ? giveawayMessage(settings, "delivered") : "",
+    failed.length ? giveawayMessage(settings, "failed", { winners: mentions(failed) }) : "",
+  ].filter(Boolean).join("\n").slice(0, 2000);
 
   try {
     if (!replyTo) {
       await channel.send(await buildGiveawayMessage(g));
     }
+    if (!text) return;
     await channel.send({
       content: text,
       reply: replyTo ? { messageReference: replyTo, failIfNotExists: false } : undefined,
@@ -327,7 +343,7 @@ export async function finish(guild: Guild, id: number, { notifyHost = true, byId
   dirty.delete(g.id);
   const messageId = await updateMessage(guild, g.id);
   await announce(guild, g, winners, messageId, promos);
-  if (g.hasPromo && notifyHost) await reportToHost(guild, g);
+  if (g.hasPromo && notifyHost && giveawayMessageConfig(await getSettings(), "organizer").enabled) await reportToHost(guild, g);
 
   event(
     "giveaway.ended",
@@ -477,6 +493,7 @@ export async function tick(guild: Guild): Promise<void> {
   }
 
   const flagged = await prisma.giveaway.findMany({ where: { needsMessageUpdate: true }, select: { id: true }, take: 20 });
+  if (flagged.length) await getSettings(true);
   for (const { id } of flagged) {
     dirty.delete(id);
     const g = await loadGiveaway({ id });

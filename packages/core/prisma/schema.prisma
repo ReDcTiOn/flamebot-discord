@@ -350,6 +350,7 @@ model OnlineTelegram {
 
 // Единственная строка с id = 1.
 model GiveawaySettings {
+  messages Json @default("{}")
   id            Int     @id @default(1)
   // Часовой пояс, в котором админы вводят дату и время итогов (IANA, например Asia/Vladivostok).
   timezone      String  @default("Asia/Vladivostok")
