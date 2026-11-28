@@ -617,3 +617,74 @@ a.member-link:hover { color: #7fb0ff; }
 .dc-profile .dc-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
 .dc-time { background: var(--surface-3); border-radius: 3px; padding: 0 3px; white-space: nowrap; }
 .dc-emoji { font-size: 12px; color: var(--text-muted); font-family: var(--mono); }
+
+/* Разметка Discord в превью */
+.dc-md { line-height: 1.5; font-size: 14px; color: #dbdee1; word-break: break-word; }
+.dc-md .dc-h1 { font-size: 20px; font-weight: 700; margin: 2px 0; }
+.dc-md .dc-h2 { font-size: 17px; font-weight: 700; margin: 2px 0; }
+.dc-md .dc-h3 { font-size: 15px; font-weight: 700; margin: 2px 0; }
+.dc-md .dc-sub { font-size: 12px; color: #949ba4; }
+.dc-md .dc-li { padding-left: 16px; position: relative; }
+.dc-md .dc-li::before { content: "•"; position: absolute; left: 4px; }
+.dc-md .dc-quote { border-left: 3px solid #4e5058; padding-left: 10px; }
+.dc-spoiler { background: #1e1f22; color: #1e1f22; border-radius: 3px; padding: 0 2px; cursor: help; transition: color 0.15s; }
+.dc-spoiler:hover { color: #dbdee1; }
+/* Пока спойлер закрыт, вложенные упоминания и код тоже не видны. */
+.dc-spoiler:not(:hover) * { color: transparent !important; background: none !important; }
+.dc-code { font-family: var(--mono); font-size: 12.5px; background: #2b2d31; border-radius: 4px; padding: 1px 4px; }
+.dc-link { color: #00a8fc; }
+.dc-message { background: #313338; border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.dc-container { border-left: 4px solid #ff5a1f; background: #2b2d31; border-radius: 0 6px 6px 0; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.dc-banner { height: 70px; border-radius: 6px; background: #3a3030; display: grid; place-items: center; color: #8a7a70; font-size: 11.5px; }
+.dc-button { align-self: flex-start; display: inline-block; background: #4e5058; color: #fff; border-radius: 4px; padding: 6px 14px; font-size: 13.5px; font-weight: 500; }
+.dc-button.primary { background: #5865f2; }
+.dc-embed-box { border-left: 4px solid #ff5a1f; background: #2b2d31; border-radius: 0 4px 4px 0; padding: 8px 12px; }
+.dc-embed-box .dc-embed-title { color: #fff; font-weight: 600; margin-bottom: 2px; }
+.dc-embed-footer { font-size: 11.5px; color: #949ba4; margin-top: 6px; }
+
+/* Редактор сообщений розыгрышей */
+.msg-editor { display: grid; grid-template-columns: 170px minmax(0, 1fr) minmax(0, 1.2fr); gap: 16px; align-items: start; }
+.msg-nav { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 16px; }
+.msg-nav-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--radius); background: none; border: 0; color: var(--text-secondary); font: inherit; font-size: 13.5px; text-align: left; cursor: pointer; }
+.msg-nav-item:hover { background: var(--tile-hover); color: var(--text); }
+.msg-nav-item.active { background: var(--surface-3); color: var(--text); }
+.msg-nav-count { font-size: 11.5px; color: var(--text-muted); }
+.msg-nav-note { font-size: 11.5px; color: var(--text-muted); padding: 8px 10px 0; line-height: 1.4; }
+.msg-list-col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.msg-search { display: flex; align-items: center; gap: 8px; padding: 0 10px; background: var(--tile); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text-muted); }
+.msg-search input { flex: 1; min-width: 0; border: 0; background: none; padding: 8px 0; font: inherit; color: var(--text); outline: none; }
+.msg-search:focus-within { border-color: var(--accent); }
+.msg-summary { font-size: 12px; margin-top: -4px; }
+.msg-card-preview { display: flex; flex-direction: column; gap: 8px; }
+.msg-seg { display: inline-flex; align-self: flex-start; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 2px; gap: 2px; }
+.msg-seg button { background: none; border: 0; color: var(--text-secondary); font: inherit; font-size: 12.5px; padding: 4px 12px; border-radius: 6px; cursor: pointer; }
+.msg-seg button.on { background: var(--surface-3); color: var(--text); }
+.msg-list { background: var(--tile); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+.msg-row { display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left; padding: 10px 12px; background: none; border: 0; border-top: 1px solid var(--border); color: var(--text); font: inherit; cursor: pointer; }
+.msg-row:first-child { border-top: 0; }
+.msg-row:hover { background: var(--tile-hover); }
+.msg-row.active { background: var(--accent-bg); box-shadow: inset 3px 0 0 var(--accent); }
+.msg-row-head { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
+.msg-row-text { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.msg-badge { font-size: 10.5px; padding: 1px 6px; border-radius: 5px; background: var(--warning-bg); color: var(--warning); white-space: nowrap; }
+.msg-badge.draft { background: var(--accent-bg); color: #7fb0ff; }
+.msg-detail { background: var(--tile); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; display: flex; flex-direction: column; gap: 12px; position: sticky; top: 16px; min-width: 0; }
+.msg-detail-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.msg-detail-head h2 { font-size: 16px; font-weight: 600; }
+.msg-hint { font-size: 13px; color: var(--text-secondary); margin-top: -6px; }
+.msg-detail textarea, .msg-detail input:not([type="checkbox"]):not([type="color"]) { width: 100%; }
+.msg-detail textarea { font-family: var(--mono); font-size: 13px; line-height: 1.5; resize: vertical; }
+.msg-embed-fields { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
+.msg-meta { display: flex; justify-content: space-between; gap: 10px; font-size: 11.5px; color: var(--text-muted); margin-top: -6px; flex-wrap: wrap; }
+.msg-vars { display: flex; flex-wrap: wrap; gap: 6px; }
+.msg-vars .chip { border: none; cursor: pointer; font: inherit; font-size: 12px; }
+.msg-vars .chip code { background: none; padding: 0; }
+.msg-vars .chip:hover { color: var(--text); background: #333; }
+.msg-required { font-size: 10.5px; color: var(--warning); }
+.msg-actions { display: flex; justify-content: space-between; gap: 10px; }
+@media (max-width: 1100px) {
+  .msg-editor { grid-template-columns: minmax(0, 1fr); }
+  .msg-nav { position: static; flex-direction: row; flex-wrap: wrap; }
+  .msg-nav-note { display: none; }
+  .msg-detail { position: static; }
+}

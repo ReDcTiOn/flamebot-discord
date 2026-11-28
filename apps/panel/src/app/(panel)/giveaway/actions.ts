@@ -6,7 +6,10 @@ import { z } from "zod";
 import {
   GIVEAWAY_MAX_DAYS,
   GIVEAWAY_MESSAGES,
+  compactGiveawayMessages,
   giveawayMessageLength,
+  giveawayMessageRequired,
+  giveawayMessageSection,
   giveawayMessageSupportsEmbed,
   type GiveawayMessageKey,
   GIVEAWAY_MAX_WINNERS,
@@ -162,35 +165,60 @@ export async function saveGiveawaySettings(_prev: ActionResult, fd: FormData): P
   });
 }
 
-export async function saveGiveawayMessages(_prev: ActionResult, fd: FormData): Promise<ActionResult> {
+export type GiveawayMessageInput = { text: string; enabled: boolean; format: "plain" | "embed"; title: string; color: string; footer: string };
+
+function messageKey(key: string): GiveawayMessageKey {
+  if (!Object.hasOwn(GIVEAWAY_MESSAGES, key)) throw new ActionError("Неизвестное сообщение");
+  return key as GiveawayMessageKey;
+}
+
+// Записывает сообщения (только отличия от стандартных). Если затронута карточка, бот перерисует активные розыгрыши.
+async function writeMessages(messages: Record<string, unknown>, key: GiveawayMessageKey) {
+  const settings = await getGiveawaySettings(prisma);
+  const compact = compactGiveawayMessages({ messages, promoDmText: settings.promoDmText });
+  await prisma.$transaction([
+    prisma.giveawaySettings.upsert({ where: { id: 1 }, create: { id: 1, messages: compact }, update: { messages: compact } }),
+    ...(giveawayMessageSection(key) === "card"
+      ? [prisma.giveaway.updateMany({ where: { status: "ACTIVE", messageId: { not: null } }, data: { needsMessageUpdate: true } })]
+      : []),
+  ]);
+}
+
+export async function saveGiveawayMessage(rawKey: string, input: GiveawayMessageInput): Promise<ActionResult> {
   return runAction("full", async (user) => {
-    const messages: Record<string, { text: string; enabled: boolean; format?: "plain" | "embed"; title?: string; color?: string; footer?: string }> = {};
-    for (const key of Object.keys(GIVEAWAY_MESSAGES) as GiveawayMessageKey[]) {
-      const def = GIVEAWAY_MESSAGES[key];
-      const text = str(fd, key).replace(/\r\n/g, "\n").trim();
-      if (!text || text.length > giveawayMessageLength(key)) throw new ActionError(`Проверь длину поля «${def.label}»`);
-      if ((key === "dm" || key === "claim") && !text.includes("{code}")) throw new ActionError(`Добавь {code} в поле «${def.label}»`);
-      const enabled = !def.optional || bool(fd, `${key}Enabled`);
-      if (!giveawayMessageSupportsEmbed(key)) {
-        messages[key] = { text, enabled };
-        continue;
-      }
-      const format = str(fd, `${key}Format`) === "embed" ? "embed" : "plain";
-      const title = str(fd, `${key}Title`).trim();
-      const footer = str(fd, `${key}Footer`).trim();
-      const color = str(fd, `${key}Color`) || "#ff5a1f";
-      if (title.length > 256 || footer.length > 256 || !/^#[0-9a-f]{6}$/i.test(color)) {
-        throw new ActionError(`Проверь заголовок, подпись и цвет Embed в поле «${def.label}»`);
-      }
-      messages[key] = { text, enabled, format, title, color, footer };
-    }
-    await prisma.$transaction([
-      prisma.giveawaySettings.upsert({ where: { id: 1 }, create: { id: 1, messages }, update: { messages } }),
-      prisma.giveaway.updateMany({ where: { status: "ACTIVE", messageId: { not: null } }, data: { needsMessageUpdate: true } }),
-    ]);
-    await audit(user, MODULE, "giveaway.messages", "Обновлены шаблоны Discord");
+    const key = messageKey(rawKey);
+    const def = GIVEAWAY_MESSAGES[key];
+    const text = String(input?.text ?? "").replace(/\r\n/g, "\n").trim();
+    if (!text) throw new ActionError("Текст не может быть пустым");
+    if (text.length > giveawayMessageLength(key)) throw new ActionError(`Не больше ${giveawayMessageLength(key)} символов`);
+    for (const p of giveawayMessageRequired(key)) if (!text.includes(`{${p}}`)) throw new ActionError(`Добавь {${p}}: без него сообщение не имеет смысла`);
+    const embed = giveawayMessageSupportsEmbed(key) && input.format === "embed";
+    const title = String(input.title ?? "").trim();
+    const footer = String(input.footer ?? "").trim();
+    const color = String(input.color ?? "#ff5a1f");
+    if (embed && (title.length > 256 || footer.length > 256)) throw new ActionError("Заголовок и подпись Embed — не больше 256 символов");
+    if (embed && !/^#[0-9a-f]{6}$/i.test(color)) throw new ActionError("Цвет — в формате #RRGGBB");
+
+    const settings = await getGiveawaySettings(prisma);
+    const all = { ...((settings.messages as Record<string, unknown> | null) ?? {}) };
+    all[key] = { text, enabled: !def.optional || input.enabled !== false, ...(embed ? { format: "embed", title, color, footer } : {}) };
+    await writeMessages(all, key);
+    await audit(user, MODULE, "giveaway.messages", def.label);
     revalidatePath("/giveaway/messages");
-    return "Сообщения сохранены. Бот обновит карточки активных розыгрышей.";
+    return `«${def.label}» сохранено.`;
+  });
+}
+
+export async function resetGiveawayMessage(rawKey: string): Promise<ActionResult> {
+  return runAction("full", async (user) => {
+    const key = messageKey(rawKey);
+    const settings = await getGiveawaySettings(prisma);
+    const all = { ...((settings.messages as Record<string, unknown> | null) ?? {}) };
+    delete all[key];
+    await writeMessages(all, key);
+    await audit(user, MODULE, "giveaway.messages", `${GIVEAWAY_MESSAGES[key].label}: стандартный текст`);
+    revalidatePath("/giveaway/messages");
+    return `«${GIVEAWAY_MESSAGES[key].label}» — снова стандартный текст.`;
   });
 }
 

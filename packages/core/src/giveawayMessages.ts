@@ -97,3 +97,117 @@ export function giveawayMessage(settings: GiveawayMessageSettings, key: Giveaway
   const cfg = giveawayMessageConfig(settings, key);
   return cfg.enabled ? renderTemplate(cfg.text, vars).slice(0, key.endsWith("Button") ? 80 : 2000) : "";
 }
+
+// ---------- Редактор в панели ----------
+
+export type GiveawayMessageConfig = ReturnType<typeof giveawayMessageConfig>;
+
+// Разделы редактора. «Организатору» — ответы на команды и ошибки, их обычно не трогают.
+export const GIVEAWAY_MESSAGE_SECTIONS = [
+  { key: "card", title: "Карточка", groups: ["Публикация", "Карточка"] },
+  { key: "replies", title: "Ответы игрокам", groups: ["Участие"] },
+  { key: "results", title: "Итоги в канале", groups: ["Итоги в канале"] },
+  { key: "promo", title: "Промокоды", groups: ["Промокоды"] },
+  { key: "organizer", title: "Организатору", groups: ["Команды организатора"] },
+] as const;
+
+export type GiveawayMessageSection = (typeof GIVEAWAY_MESSAGE_SECTIONS)[number]["key"];
+
+export function giveawayMessageSection(key: GiveawayMessageKey): GiveawayMessageSection {
+  const group = GIVEAWAY_MESSAGES[key].group;
+  return GIVEAWAY_MESSAGE_SECTIONS.find((s) => (s.groups as readonly string[]).includes(group))!.key;
+}
+
+// Когда бот отправляет сообщение: подсказка в редакторе. У служебных ответов организатору хватает названия.
+export const GIVEAWAY_MESSAGE_HINTS: Partial<Record<GiveawayMessageKey, string>> = {
+  everyone: "Строка над карточкой при публикации. Пинг сработает, только если у бота есть право упоминать @everyone в канале.",
+  endTime: "Строка в карточке, пока розыгрыш идёт.",
+  boosters: "Строка в карточке, если розыгрыш только для бустеров.",
+  promoHint: "Строка в карточке, если за победу дают промокод.",
+  winners: "Блок в карточке после итогов.",
+  noWinners: "Вместо списка победителей, если участников не было.",
+  moreWinners: "Дописывается к списку, если победителей больше 40.",
+  cancelled: "Вся карточка, если розыгрыш отменили.",
+  claimHint: "Над кнопкой «Получить промокод» после итогов.",
+  joinButton: "Надпись на кнопке участия.",
+  claimButton: "Надпись на кнопке после итогов, если приз — промокод.",
+  congrats: "Сообщение в канале с итогами, если есть победители.",
+  reroll: "Сообщение в канале, когда организатор перевыбрал победителей.",
+  empty: "Сообщение в канале, если победителей нет.",
+  shortage: "Дописывается к итогам, если участников меньше, чем призов.",
+  delivered: "Дописывается к итогам, когда промокоды ушли в личные сообщения.",
+  failed: "Дописывается к итогам, если кому-то не удалось написать в личные сообщения.",
+  dm: "Личное сообщение победителю. Без {code} промокод не дойдёт.",
+  organizer: "Начало отчёта организатору в личных сообщениях, ниже — список выданных кодов.",
+  claim: "Ответ победителю на кнопку «Получить промокод». Видит только он. Без {code} промокод не дойдёт.",
+  unavailable: "Ответ на «Получить промокод», если кодов у розыгрыша нет.",
+  notWinner: "Ответ на «Получить промокод», если нажал не победитель.",
+  notAssigned: "Ответ на «Получить промокод», если победителю не досталось кода.",
+  claimError: "Ответ на «Получить промокод», если показать код не получилось.",
+  closed: "Ответ на «Участвовать», если розыгрыш уже завершён.",
+  drawing: "Ответ на «Участвовать», когда время вышло, а итоги ещё подводятся.",
+  needBoost: "Ответ на «Участвовать», если игрок не бустит сервер.",
+  already: "Ответ на повторное «Участвовать». Под ним кнопка выхода.",
+  joined: "Ответ на «Участвовать»: игрок записан.",
+  joinedPromo: "Дописывается к ответу об участии, если приз — промокод.",
+  left: "Ответ, когда игрок вышел из розыгрыша.",
+  leaveButton: "Кнопка под ответом «Уже участвует».",
+  rateLimit: "Ответ, если игрок жмёт кнопки слишком часто.",
+};
+
+// Что подставит бот вместо {…}.
+export const GIVEAWAY_PLACEHOLDERS: Record<string, string> = {
+  prize: "приз",
+  winners: "упоминания победителей",
+  time: "дата и время итогов",
+  relative: "сколько осталось: «через 2 дня»",
+  count: "число",
+  code: "промокод",
+  server: "название сервера",
+  id: "номер розыгрыша",
+  url: "ссылка на сообщение розыгрыша",
+  endsAt: "дата итогов",
+  timezone: "часовой пояс",
+  channel: "канал",
+  permissions: "каких прав не хватает",
+  value: "что ввёл организатор",
+};
+
+export function giveawayMessagePlaceholders(key: GiveawayMessageKey): string[] {
+  return [...new Set(GIVEAWAY_MESSAGES[key].text.match(/\{\w+\}/g) ?? [])].map((p) => p.slice(1, -1));
+}
+
+// Обязательные подстановки: без них сообщение теряет смысл.
+export function giveawayMessageRequired(key: GiveawayMessageKey): string[] {
+  return key === "dm" || key === "claim" ? ["code"] : [];
+}
+
+export function giveawayMessageDefaults(settings: Pick<GiveawayMessageSettings, "promoDmText">, key: GiveawayMessageKey): GiveawayMessageConfig {
+  return giveawayMessageConfig({ messages: {}, promoDmText: settings.promoDmText }, key);
+}
+
+export type GiveawayMessageOverride = { text?: string; enabled?: false; format?: "embed"; title?: string; color?: string; footer?: string };
+
+// Отличия от стандартного: в базе храним только их, чтобы правки стандартных текстов доходили до всех.
+export function giveawayMessageOverride(def: GiveawayMessageConfig, cfg: GiveawayMessageConfig): GiveawayMessageOverride | null {
+  const o: GiveawayMessageOverride = {};
+  if (cfg.text !== def.text) o.text = cfg.text;
+  if (!cfg.enabled) o.enabled = false;
+  if (cfg.format === "embed") {
+    o.format = "embed";
+    if (cfg.title) o.title = cfg.title;
+    if (cfg.color !== def.color) o.color = cfg.color;
+    if (cfg.footer) o.footer = cfg.footer;
+  }
+  return Object.keys(o).length ? o : null;
+}
+
+// Все сохранённые сообщения без совпадающих со стандартными полей. Старые записи «целиком» так тоже ужимаются.
+export function compactGiveawayMessages(settings: GiveawayMessageSettings): Record<string, GiveawayMessageOverride> {
+  const out: Record<string, GiveawayMessageOverride> = {};
+  for (const key of Object.keys(GIVEAWAY_MESSAGES) as GiveawayMessageKey[]) {
+    const o = giveawayMessageOverride(giveawayMessageDefaults(settings, key), giveawayMessageConfig(settings, key));
+    if (o) out[key] = o;
+  }
+  return out;
+}

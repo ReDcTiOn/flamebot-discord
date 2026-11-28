@@ -230,7 +230,9 @@ async function sendPromoDm(guild: Guild, g: Giveaway, promo: GiveawayPromoCode):
   if (!text) return false;
   try {
     const user = await guild.client.users.fetch(promo.userId!);
-    await user.send({ ...giveawayPayload(settings, "dm", text, vars), flags: MessageFlags.SuppressEmbeds, allowedMentions: { parse: [] } });
+    const payload = giveawayPayload(settings, "dm", text, vars);
+    // SuppressEmbeds прячет превью ссылок в обычном тексте, но спрятал бы и сам Embed: тогда ЛС пришло бы пустым.
+    await user.send({ ...payload, ...("embeds" in payload ? {} : { flags: MessageFlags.SuppressEmbeds }), allowedMentions: { parse: [] } });
     return true;
   } catch {
     log.warn(`Не удалось отправить промокод в ЛС пользователю ${promo.userId}`);
